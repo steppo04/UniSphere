@@ -1,0 +1,31 @@
+package com.example.unisphere.ui.composables
+
+import androidx.compose.runtime.Composable
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import com.example.unisphere.ui.screen.HomeScreen
+import com.example.unisphere.ui.screen.LandingPage
+import com.example.unisphere.ui.screen.accessScreen.LoginScreen
+import com.example.unisphere.ui.screen.accessScreen.SigninScreen
+
+@Composable
+fun NavGraph(navController: NavHostController) {
+    NavHost(
+        navController = navController,
+        startDestination = NavigationRoute.LandingPage
+    ) {
+        composable<NavigationRoute.LoginScreen> {
+            LoginScreen(navController)
+        }
+        composable<NavigationRoute.Homescreen> {
+            HomeScreen(navController)
+        }
+        composable<NavigationRoute.SignInScreen> {
+            SigninScreen(navController)
+        }
+        composable<NavigationRoute.LandingPage> {
+            LandingPage(navController)
+        }
+    }
+}
