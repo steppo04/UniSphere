@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.unisphere.ui.screen.HomeScreen
 import com.example.unisphere.ui.screen.LandingPage
+import com.example.unisphere.ui.screen.ProfileScreen
 import com.example.unisphere.ui.screen.accessScreen.LoginScreen
 import com.example.unisphere.ui.screen.accessScreen.SigninScreen
 
@@ -26,6 +27,9 @@ fun NavGraph(navController: NavHostController) {
         }
         composable<NavigationRoute.LandingPage> {
             LandingPage(navController)
+        }
+        composable<NavigationRoute.ProfileScreen> {
+            ProfileScreen(navController)
         }
     }
 }

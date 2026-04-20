@@ -16,16 +16,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import com.example.unisphere.R
-
-//import androidx.navigation.NavHostController
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppBar(
-    title: String
+    title: String,
+    navController: NavHostController? = null
 ) {
     TopAppBar(
         title = {
@@ -45,7 +43,9 @@ fun AppBar(
             }
         },
         actions = {
-            IconButton(onClick = { /* Per ora non fa nulla */ }) {
+            IconButton(onClick = { 
+                navController?.navigate(NavigationRoute.ProfileScreen)
+            }) {
                 Icon(
                     imageVector = Icons.Default.AccountCircle,
                     contentDescription = "Account",

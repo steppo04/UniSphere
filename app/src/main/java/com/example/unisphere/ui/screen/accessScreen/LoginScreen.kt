@@ -99,7 +99,7 @@ fun LoginScreen(navController: NavHostController) {
             onClick = {
                 if (username == "admin" && password == "admin") {
                     isError = false
-                    navController.navigate(NavigationRoute.Homescreen) {
+                    navController.navigate(NavigationRoute.ProfileScreen) {
                         popUpTo(NavigationRoute.LoginScreen) { inclusive = true }
                     }
                 } else {

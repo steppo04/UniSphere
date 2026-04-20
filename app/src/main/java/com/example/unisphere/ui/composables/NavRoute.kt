@@ -6,4 +6,5 @@ sealed interface NavigationRoute {
     @Serializable data object LoginScreen : NavigationRoute
     @Serializable data object SignInScreen : NavigationRoute
     @Serializable data object LandingPage : NavigationRoute
+    @Serializable data object ProfileScreen : NavigationRoute
 }
