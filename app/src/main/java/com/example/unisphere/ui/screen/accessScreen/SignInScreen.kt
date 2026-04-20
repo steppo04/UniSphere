@@ -9,10 +9,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.example.unisphere.R
 import com.example.unisphere.ui.composables.NavigationRoute
 
 @Composable
@@ -30,23 +33,21 @@ fun SigninScreen(navController: NavHostController) {
         Spacer(modifier = Modifier.height(40.dp))
 
         // --- INTESTAZIONE ---
-        Text(
-            text = "Unisciti a UniSphere",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
+        Icon(
+            painter = painterResource(id = R.drawable.logo_completo),
+            contentDescription = "App Logo",
+            modifier = Modifier.size(300.dp),
+            tint = Color.Unspecified
         )
         Text(
             text = "Crea il tuo account per iniziare",
+            fontSize = 16.sp,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- CAMPI DI INPUT (STATICI) ---
-
-        // Nome
         OutlinedTextField(
             value = "",
             onValueChange = {},

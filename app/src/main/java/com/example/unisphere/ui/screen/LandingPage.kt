@@ -3,18 +3,19 @@ package com.example.unisphere.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.example.unisphere.R
 import com.example.unisphere.ui.composables.NavigationRoute
 
 @Composable
@@ -39,17 +40,10 @@ fun LandingPage(navController: NavHostController) {
             modifier = Modifier.padding(top = 60.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.RocketLaunch,
-                contentDescription = null,
-                modifier = Modifier.size(100.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "UniSphere",
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface
+                painter = painterResource(id = R.drawable.logo_completo),
+                contentDescription = "App Logo",
+                modifier = Modifier.size(300.dp),
+                tint = Color.Unspecified
             )
             Text(
                 text = "La tua vita universitaria, semplificata.",
