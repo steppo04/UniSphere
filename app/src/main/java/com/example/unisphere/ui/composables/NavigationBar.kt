@@ -8,9 +8,10 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavHostController
 
 @Composable
-fun BottomNavigationBar() {
+fun BottomNavigationBar(navController: NavHostController) {
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
@@ -28,7 +29,7 @@ fun BottomNavigationBar() {
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione */ },
+            onClick = { navController.navigate(NavigationRoute.CalendarScreen) },
             icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "calendar") },
             label = { Text("Calendar") }
         )
