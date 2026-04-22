@@ -7,7 +7,7 @@ import androidx.navigation.compose.composable
 import com.example.unisphere.ui.screen.HomeScreen
 import com.example.unisphere.ui.screen.LandingPage
 import com.example.unisphere.ui.screen.accessScreen.LoginScreen
-import com.example.unisphere.ui.screen.accessScreen.SigninScreen
+import com.example.unisphere.ui.screen.accessScreen.SignInScreen
 import com.example.unisphere.ui.screen.calendar.AddCalendarEvent
 import com.example.unisphere.ui.screen.calendar.CalendarScreen
 
@@ -15,7 +15,7 @@ import com.example.unisphere.ui.screen.calendar.CalendarScreen
 fun NavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
-        startDestination = NavigationRoute.CalendarScreen
+        startDestination = NavigationRoute.LandingPage
     ) {
         composable<NavigationRoute.LoginScreen> {
             LoginScreen(navController)
@@ -24,7 +24,7 @@ fun NavGraph(navController: NavHostController) {
             HomeScreen(navController)
         }
         composable<NavigationRoute.SignInScreen> {
-            SigninScreen(navController)
+            SignInScreen(navController)
         }
         composable<NavigationRoute.LandingPage> {
             LandingPage(navController)

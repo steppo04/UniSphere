@@ -66,4 +66,6 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json.v238)
     coreLibraryDesugaring(libs.desugar.jdk.libs.v214)
     implementation(libs.compose.v260)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 }
