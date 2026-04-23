@@ -43,7 +43,7 @@ fun AppBar(
             }
         },
         actions = {
-            IconButton(onClick = { 
+            IconButton(onClick = {
                 navController?.navigate(NavigationRoute.ProfileScreen)
             }) {
                 Icon(

@@ -21,7 +21,7 @@ fun BottomNavigationBar(navController: NavHostController) {
     ) {
         NavigationBarItem(
             selected = currentRoute?.contains("Homescreen") == true,
-            onClick = { 
+            onClick = {
                 navController.navigate(NavigationRoute.Homescreen) {
                     popUpTo(navController.graph.startDestinationId)
                     launchSingleTop = true
@@ -32,26 +32,26 @@ fun BottomNavigationBar(navController: NavHostController) {
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione futura */ },
+            onClick = { /* Navigazione */ },
             icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = "Wallet") },
             label = { Text("Wallet") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione futura */ },
+            onClick = { navController.navigate(NavigationRoute.CalendarScreen) },
             icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "calendar") },
             label = { Text("Calendar") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione futura */ },
+            onClick = { /* Navigazione */ },
             icon = { Icon(Icons.Default.Restaurant, contentDescription = "SmartCook") },
             label = { Text("CookAI") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione futura */ },
-            icon = { Icon(Icons.Default.Place, contentDescription = "Events") },
+            onClick = { /* Navigazione */ },
+            icon = { Icon(Icons.Default.Place, contentDescription = "SmartCook") },
             label = { Text("Events") }
         )
     }

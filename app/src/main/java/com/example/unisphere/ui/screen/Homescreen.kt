@@ -1,5 +1,6 @@
 package com.example.unisphere.ui.screen
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -15,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,8 +28,8 @@ import com.example.unisphere.ui.composables.BottomNavigationBar
 @Composable
 fun HomeScreen(navController: NavHostController) {
     Scaffold(
-        topBar = { AppBar(title = "UniSphere", navController = navController) },
-        bottomBar = { BottomNavigationBar(navController = navController) }
+        topBar = { AppBar(title = "UniSphere", navController) },
+        bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -91,6 +94,7 @@ fun CleaningSquare(modifier: Modifier) {
                 Text("Pulizie", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
             Spacer(modifier = Modifier.height(8.dp))
+            // Lista fittizia
             Text("• Cucina: Marco", fontSize = 12.sp)
             Text("• Bagno: Giulia", fontSize = 12.sp)
             Text("• Salotto: Tu", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -125,6 +129,7 @@ fun BalanceSection() {
         Column(modifier = Modifier.padding(16.dp)) {
             Text("Bilancio Coinquilini", fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
+            // Dati fittizi tipo Splitwise
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Devi dare a Luca", fontSize = 14.sp)
                 Text("15.50€", color = Color.Red, fontWeight = FontWeight.Bold)
