@@ -31,27 +31,37 @@ fun BottomNavigationBar(navController: NavHostController) {
             label = { Text("Home") }
         )
         NavigationBarItem(
-            selected = false,
-            onClick = { /* Navigazione */ },
+            selected = currentRoute?.contains("WalletScreen") == true,
+            onClick = {
+                navController.navigate(NavigationRoute.WalletScreen) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            },
             icon = { Icon(Icons.Default.AccountBalanceWallet, contentDescription = "Wallet") },
             label = { Text("Wallet") }
         )
         NavigationBarItem(
-            selected = false,
-            onClick = { navController.navigate(NavigationRoute.CalendarScreen) },
+            selected = currentRoute?.contains("CalendarScreen") == true,
+            onClick = {
+                navController.navigate(NavigationRoute.CalendarScreen) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            },
             icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "calendar") },
             label = { Text("Calendar") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione */ },
+            onClick = { /* Navigazione futura */ },
             icon = { Icon(Icons.Default.Restaurant, contentDescription = "SmartCook") },
             label = { Text("CookAI") }
         )
         NavigationBarItem(
             selected = false,
-            onClick = { /* Navigazione */ },
-            icon = { Icon(Icons.Default.Place, contentDescription = "SmartCook") },
+            onClick = { /* Navigazione futura */ },
+            icon = { Icon(Icons.Default.Place, contentDescription = "Events") },
             label = { Text("Events") }
         )
     }
