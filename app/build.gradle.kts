@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.ktor.serialization.kotlinx.json.v238)
+    implementation (libs.coil.compose)
     coreLibraryDesugaring(libs.desugar.jdk.libs.v214)
     implementation(libs.compose.v260)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

@@ -28,7 +28,7 @@ import com.example.unisphere.ui.composables.BottomNavigationBar
 @Composable
 fun HomeScreen(navController: NavHostController) {
     Scaffold(
-        topBar = { AppBar(title = "UniSphere") },
+        topBar = { AppBar(title = "UniSphere", navController) },
         bottomBar = { BottomNavigationBar(navController) }
     ) { paddingValues ->
         Column(

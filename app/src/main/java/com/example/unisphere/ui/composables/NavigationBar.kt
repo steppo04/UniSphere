@@ -9,15 +9,24 @@ import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 @Composable
 fun BottomNavigationBar(navController: NavHostController) {
+    val navBackStackEntry = navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry.value?.destination?.route
+
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         NavigationBarItem(
-            selected = true,
-            onClick = { /* Navigazione */ },
+            selected = currentRoute?.contains("Homescreen") == true,
+            onClick = {
+                navController.navigate(NavigationRoute.Homescreen) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            },
             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
             label = { Text("Home") }
         )

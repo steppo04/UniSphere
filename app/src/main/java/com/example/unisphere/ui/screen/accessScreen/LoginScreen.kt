@@ -55,6 +55,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // --- USERNAME ---
         OutlinedTextField(
             value = state.username,
             onValueChange = {
@@ -101,8 +102,10 @@ fun LoginScreen(
                 viewModel.onAction(
                     action = LoginAction.OnLoginClicked,
                     onSuccess = {
-                        navController.navigate(NavigationRoute.Homescreen) {
-                            popUpTo(NavigationRoute.LoginScreen) { inclusive = true }
+                        navController.navigate(NavigationRoute.ProfileScreen) {
+                            popUpTo(NavigationRoute.LoginScreen) {
+                                inclusive = true
+                            }
                         }
                     }
                 )
