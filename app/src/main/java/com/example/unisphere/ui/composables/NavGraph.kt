@@ -6,7 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.unisphere.ui.screen.HomeScreen
 import com.example.unisphere.ui.screen.LandingPage
-import com.example.unisphere.ui.screen.ProfileScreen
+import com.example.unisphere.ui.screen.profile.ProfileScreen
 import com.example.unisphere.ui.screen.accessScreen.LoginScreen
 import com.example.unisphere.ui.screen.accessScreen.SignInScreen
 import com.example.unisphere.ui.screen.calendar.AddCalendarEvent
