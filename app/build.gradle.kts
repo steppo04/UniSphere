@@ -7,9 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.unisphere"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.unisphere"
@@ -69,4 +67,6 @@ dependencies {
     implementation(libs.compose.v260)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.play.services.location)
 }

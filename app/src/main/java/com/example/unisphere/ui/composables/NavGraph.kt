@@ -16,7 +16,7 @@ import com.example.unisphere.ui.screen.calendar.CalendarScreen
 fun NavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
-        startDestination = NavigationRoute.LandingPage
+        startDestination = NavigationRoute.Homescreen
     ) {
         composable<NavigationRoute.LoginScreen> {
             LoginScreen(navController)

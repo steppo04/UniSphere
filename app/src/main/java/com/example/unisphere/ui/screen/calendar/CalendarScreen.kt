@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.unisphere.ui.composables.AppBar
+import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
@@ -55,15 +57,8 @@ fun CalendarScreen(
     )
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("UniCalendar", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White
-                )
-            )
-        },
+        topBar = { AppBar(title = "UniCalendar", navController) },
+        bottomBar = { BottomNavigationBar(navController) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(NavigationRoute.AddCalendarEvent) },
