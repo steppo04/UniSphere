@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.PopupProperties
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
@@ -26,40 +28,22 @@ data class PointOfInterest(
     val id: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val address: String,
-    val coordinates: String,
     val notes: String
 )
 
 @Composable
-fun MapScreen(navController: NavHostController) {
+fun MapScreen(
+    navController: NavHostController,
+    viewModel: MapViewModel = viewModel()
+) {
+    val state = viewModel.state
     val context = LocalContext.current
-    var pois by remember {
-        mutableStateOf(
-            mutableListOf(
-                PointOfInterest(
-                    name = "Biblioteca Centrale",
-                    address = "Via dell'Università, 1",
-                    coordinates = "41.8919, 12.5113",
-                    notes = "Ottimo posto per studiare in silenzio."
-                ),
-                PointOfInterest(
-                    name = "Mensa Universitaria",
-                    address = "Piazza Studenti, 5",
-                    coordinates = "41.8930, 12.5150",
-                    notes = "Pranzo economico, chiude alle 15:00."
-                )
-            )
-        )
-    }
-
-    var showAddDialog by remember { mutableStateOf(false) }
-    var selectedPoi by remember { mutableStateOf<PointOfInterest?>(null) }
 
     Scaffold(
         topBar = { AppBar(title = "UniMaps", navController = navController) },
         bottomBar = { BottomNavigationBar(navController = navController) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
+            FloatingActionButton(onClick = { viewModel.onAction(MapAction.OnAddPoiClicked) }) {
                 Icon(Icons.Default.AddLocation, contentDescription = "Aggiungi Punto")
             }
         }
@@ -77,7 +61,7 @@ fun MapScreen(navController: NavHostController) {
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Pulsante per aprire un'app esterna (es. Google Maps per cercare coordinate)
+            // Pulsante per aprire un'app esterna per cercare coordinate/luoghi
             Button(
                 onClick = {
                     val gmmIntentUri = Uri.parse("geo:0,0?q=università")
@@ -89,18 +73,18 @@ fun MapScreen(navController: NavHostController) {
             ) {
                 Icon(Icons.Default.Map, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Apri Mappa Esterna per cercare")
+                Text("Apri Mappa Esterna")
             }
 
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                items(pois) { poi ->
+                items(state.pois) { poi ->
                     PoiCard(
                         poi = poi,
-                        onClick = { selectedPoi = poi },
-                        onDelete = { pois = pois.filter { it.id != poi.id }.toMutableList() }
+                        onClick = { viewModel.onAction(MapAction.OnPoiSelected(poi)) },
+                        onDelete = { viewModel.onAction(MapAction.OnDeletePoiClicked(poi.id)) }
                     )
                 }
             }
@@ -108,12 +92,12 @@ fun MapScreen(navController: NavHostController) {
     }
 
     // Dialogo per visualizzare i dettagli del POI
-    if (selectedPoi != null) {
+    if (state.selectedPoi != null) {
         PoiDetailsDialog(
-            poi = selectedPoi!!,
-            onDismiss = { selectedPoi = null },
+            poi = state.selectedPoi,
+            onDismiss = { viewModel.onAction(MapAction.OnPoiSelected(null)) },
             onOpenInMaps = {
-                val uri = Uri.parse("geo:0,0?q=${selectedPoi!!.coordinates}(${selectedPoi!!.name})")
+                val uri = Uri.parse("geo:0,0?q=${Uri.encode(state.selectedPoi.address)}")
                 val intent = Intent(Intent.ACTION_VIEW, uri)
                 context.startActivity(intent)
             }
@@ -121,18 +105,12 @@ fun MapScreen(navController: NavHostController) {
     }
 
     // Dialogo per aggiungere un nuovo POI
-    if (showAddDialog) {
+    if (state.showAddDialog) {
         AddPoiDialog(
-            onDismiss = { showAddDialog = false },
-            onConfirm = { name, address, coords, notes ->
-                pois = (pois + PointOfInterest(
-                    name = name,
-                    address = address,
-                    coordinates = coords,
-                    notes = notes
-                )).toMutableList()
-                showAddDialog = false
-            }
+            state = state,
+            onAction = viewModel::onAction,
+            onDismiss = { viewModel.onAction(MapAction.OnDismissAddDialog) },
+            onConfirm = { viewModel.onAction(MapAction.OnSavePoiClicked) }
         )
     }
 }
@@ -174,9 +152,9 @@ fun PoiDetailsDialog(poi: PointOfInterest, onDismiss: () -> Unit, onOpenInMaps: 
         title = { Text(poi.name, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailRow(label = "Via", value = poi.address)
-                DetailRow(label = "Coordinate", value = poi.coordinates)
+                DetailRow(label = "Indirizzo", value = poi.address)
                 if (poi.notes.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
                     Text("Note:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                     Text(poi.notes, style = MaterialTheme.typography.bodyMedium)
                 }
@@ -203,26 +181,82 @@ fun DetailRow(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddPoiDialog(onDismiss: () -> Unit, onConfirm: (String, String, String, String) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    var coords by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
+fun AddPoiDialog(
+    state: MapState,
+    onAction: (MapAction) -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val context = LocalContext.current
+    var expanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.addressSuggestions) {
+        expanded = state.addressSuggestions.isNotEmpty()
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nuovo Punto di Interesse") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome") })
-                OutlinedTextField(value = address, onValueChange = { address = it }, label = { Text("Indirizzo") })
-                OutlinedTextField(value = coords, onValueChange = { coords = it }, label = { Text("Coordinate (lat, lng)") })
-                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Note") })
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = state.newPoiName,
+                    onValueChange = { onAction(MapAction.OnNameChanged(it)) },
+                    label = { Text("Nome") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = state.newPoiAddress,
+                        onValueChange = { onAction(MapAction.OnAddressChanged(it, context)) },
+                        label = { Text("Indirizzo / Via") },
+                        modifier = Modifier.fillMaxWidth(),
+                        trailingIcon = {
+                            if (state.isLocating) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                IconButton(onClick = { onAction(MapAction.OnUseCurrentLocation(context)) }) {
+                                    Icon(Icons.Default.MyLocation, contentDescription = "Usa posizione attuale")
+                                }
+                            }
+                        }
+                    )
+                    
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        modifier = Modifier.fillMaxWidth(0.8f),
+                        properties = PopupProperties(focusable = false)
+                    ) {
+                        state.addressSuggestions.forEach { suggestion ->
+                            DropdownMenuItem(
+                                text = { Text(suggestion) },
+                                onClick = {
+                                    onAction(MapAction.OnSuggestionSelected(suggestion))
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = state.newPoiNotes,
+                    onValueChange = { onAction(MapAction.OnNotesChanged(it)) },
+                    label = { Text("Note") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
-            Button(onClick = { if (name.isNotBlank()) onConfirm(name, address, coords, notes) }) {
+            Button(
+                onClick = onConfirm,
+                enabled = state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank()
+            ) {
                 Text("Salva")
             }
         },
