@@ -11,4 +11,5 @@ sealed interface NavigationRoute {
     @Serializable data object WalletScreen : NavigationRoute
     @Serializable data object CalendarScreen : NavigationRoute
     @Serializable data object AddCalendarEvent : NavigationRoute
+    @Serializable data object MapScreen : NavigationRoute
 }

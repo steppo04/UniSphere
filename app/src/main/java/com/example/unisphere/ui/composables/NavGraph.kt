@@ -12,6 +12,7 @@ import com.example.unisphere.ui.screen.accessScreen.SignInScreen
 import com.example.unisphere.ui.screen.calendar.AddCalendarEvent
 import com.example.unisphere.ui.screen.calendar.CalendarScreen
 import com.example.unisphere.ui.screen.wallet.WalletScreen
+import com.example.unisphere.ui.screen.map.MapScreen
 
 @Composable
 fun NavGraph(navController: NavHostController) {
@@ -42,6 +43,9 @@ fun NavGraph(navController: NavHostController) {
         }
         composable<NavigationRoute.WalletScreen> {
             WalletScreen(navController)
+        }
+        composable<NavigationRoute.MapScreen> {
+            MapScreen(navController)
         }
     }
 }

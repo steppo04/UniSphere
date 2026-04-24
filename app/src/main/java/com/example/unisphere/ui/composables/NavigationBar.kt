@@ -59,10 +59,15 @@ fun BottomNavigationBar(navController: NavHostController) {
             label = { Text("CookAI") }
         )
         NavigationBarItem(
-            selected = false,
-            onClick = { /* Navigazione futura */ },
-            icon = { Icon(Icons.Default.Place, contentDescription = "Events") },
-            label = { Text("Events") }
+            selected = currentRoute?.contains("MapScreen") == true,
+            onClick = {
+                navController.navigate(NavigationRoute.MapScreen) {
+                    popUpTo(navController.graph.startDestinationId)
+                    launchSingleTop = true
+                }
+            },
+            icon = { Icon(Icons.Default.Place, contentDescription = "Maps") },
+            label = { Text("Maps") }
         )
     }
 }
