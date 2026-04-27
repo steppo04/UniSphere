@@ -97,7 +97,7 @@ fun MapScreen(
             poi = state.selectedPoi,
             onDismiss = { viewModel.onAction(MapAction.OnPoiSelected(null)) },
             onOpenInMaps = {
-                val uri = Uri.parse("geo:0,0?q=${Uri.encode(state.selectedPoi.address)}")
+                val uri = Uri.parse("geo:0,0?q=${Uri.encode(state.selectedPoi!!.address)}")
                 val intent = Intent(Intent.ACTION_VIEW, uri)
                 context.startActivity(intent)
             }
@@ -189,7 +189,6 @@ fun AddPoiDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.addressSuggestions) {
@@ -212,14 +211,17 @@ fun AddPoiDialog(
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = state.newPoiAddress,
-                        onValueChange = { onAction(MapAction.OnAddressChanged(it, context)) },
+                        onValueChange = { 
+                            onAction(MapAction.OnAddressChanged(it))
+                            expanded = it.length >= 3
+                        },
                         label = { Text("Indirizzo / Via") },
                         modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (state.isLocating) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                             } else {
-                                IconButton(onClick = { onAction(MapAction.OnUseCurrentLocation(context)) }) {
+                                IconButton(onClick = { onAction(MapAction.OnUseCurrentLocation) }) {
                                     Icon(Icons.Default.MyLocation, contentDescription = "Usa posizione attuale")
                                 }
                             }
@@ -229,7 +231,7 @@ fun AddPoiDialog(
                     DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false },
-                        modifier = Modifier.fillMaxWidth(0.8f),
+                        modifier = Modifier.fillMaxWidth(),
                         properties = PopupProperties(focusable = false)
                     ) {
                         state.addressSuggestions.forEach { suggestion ->
