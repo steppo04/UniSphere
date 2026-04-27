@@ -62,12 +62,17 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
-    implementation(libs.ktor.serialization.kotlinx.json.v238)
-    implementation (libs.coil.compose)
+    
+    // Ktor
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    
+    implementation(libs.coil.compose)
     coreLibraryDesugaring(libs.desugar.jdk.libs.v214)
     implementation(libs.compose.v260)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.play.services)
-    implementation(libs.play.services.location)
 }
