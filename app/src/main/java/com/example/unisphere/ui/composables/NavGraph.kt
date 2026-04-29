@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
 import com.example.unisphere.ui.screen.HomeScreen
 import com.example.unisphere.ui.screen.LandingPage
 import com.example.unisphere.ui.screen.profile.ProfileScreen
@@ -14,6 +15,7 @@ import com.example.unisphere.ui.screen.calendar.CalendarScreen
 import com.example.unisphere.ui.screen.wallet.WalletScreen
 import com.example.unisphere.ui.screen.map.MapScreen
 import com.example.unisphere.ui.screen.cook.CookScreen
+import com.example.unisphere.ui.screen.cook.RecipeDetailScreen
 
 @Composable
 fun NavGraph(navController: NavHostController) {
@@ -50,6 +52,10 @@ fun NavGraph(navController: NavHostController) {
         }
         composable<NavigationRoute.CookScreen> {
             CookScreen(navController)
+        }
+        composable<NavigationRoute.RecipeDetailScreen> { backStackEntry ->
+            val route: NavigationRoute.RecipeDetailScreen = backStackEntry.toRoute()
+            RecipeDetailScreen(recipeId = route.recipeId, navController = navController)
         }
     }
 }

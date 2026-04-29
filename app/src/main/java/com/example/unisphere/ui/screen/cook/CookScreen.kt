@@ -24,6 +24,7 @@ import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
+import com.example.unisphere.ui.composables.NavigationRoute
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +78,12 @@ fun CookScreen(
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     items(state.recipes) { recipe ->
-                        RecipeCard(recipe = recipe)
+                        RecipeCard(
+                            recipe = recipe,
+                            onClick = {
+                                navController.navigate(NavigationRoute.RecipeDetailScreen(recipe.id))
+                            }
+                        )
                     }
                 }
             }
@@ -86,9 +92,11 @@ fun CookScreen(
 }
 
 @Composable
-fun RecipeCard(recipe: Recipe) {
+fun RecipeCard(recipe: Recipe, onClick: () -> Unit) {
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp)
     ) {
         Column {
