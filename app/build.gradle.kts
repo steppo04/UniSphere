@@ -75,4 +75,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // OpenStreetMap
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
 }

@@ -2,7 +2,6 @@ package com.example.unisphere.ui.screen.map
 
 import android.annotation.SuppressLint
 import android.app.Application
-import android.content.Context
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
@@ -23,17 +22,30 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
 
+data class PointOfInterest(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val address: String,
+    val notes: String,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
+)
+
 data class MapState(
     val pois: List<PointOfInterest> = listOf(
         PointOfInterest(
-            name = "Biblioteca Centrale",
-            address = "Via dell'Università, 1, Roma",
-            notes = "Ottimo posto per studiare in silenzio."
+            name = "Campus Cesena",
+            address = "Via dell'Università, 50, Cesena",
+            notes = "Sede principale dei corsi di Informatica.",
+            latitude = 44.1481,
+            longitude = 12.2359
         ),
         PointOfInterest(
-            name = "Mensa Universitaria",
-            address = "Piazza Studenti, 5, Roma",
-            notes = "Pranzo economico, chiude alle 15:00."
+            name = "Mensa Universitaria Cesena",
+            address = "Via Pasi, 30, Cesena",
+            notes = "Mensa per studenti universitari.",
+            latitude = 44.1465,
+            longitude = 12.2415
         )
     ),
     val showAddDialog: Boolean = false,
@@ -80,19 +92,24 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             }
             MapAction.OnSavePoiClicked -> {
                 if (state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank()) {
-                    val newPoi = PointOfInterest(
-                        name = state.newPoiName,
-                        address = state.newPoiAddress,
-                        notes = state.newPoiNotes
-                    )
-                    state = state.copy(
-                        pois = state.pois + newPoi,
-                        showAddDialog = false,
-                        newPoiName = "",
-                        newPoiAddress = "",
-                        newPoiNotes = "",
-                        addressSuggestions = emptyList()
-                    )
+                    viewModelScope.launch {
+                        val coords = getCoordinatesFromAddress(state.newPoiAddress)
+                        val newPoi = PointOfInterest(
+                            name = state.newPoiName,
+                            address = state.newPoiAddress,
+                            notes = state.newPoiNotes,
+                            latitude = coords?.first ?: 0.0,
+                            longitude = coords?.second ?: 0.0
+                        )
+                        state = state.copy(
+                            pois = state.pois + newPoi,
+                            showAddDialog = false,
+                            newPoiName = "",
+                            newPoiAddress = "",
+                            newPoiNotes = "",
+                            addressSuggestions = emptyList()
+                        )
+                    }
                 }
             }
             MapAction.OnAddPoiClicked -> {
@@ -146,6 +163,21 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 e.printStackTrace()
             } finally {
                 state = state.copy(isSearchingSuggestions = false)
+            }
+        }
+    }
+
+    private suspend fun getCoordinatesFromAddress(addressName: String): Pair<Double, Double>? {
+        val geocoder = Geocoder(getApplication(), Locale.getDefault())
+        return withContext(Dispatchers.IO) {
+            try {
+                @Suppress("DEPRECATION")
+                val addresses = geocoder.getFromLocationName(addressName, 1)
+                addresses?.firstOrNull()?.let {
+                    Pair(it.latitude, it.longitude)
+                }
+            } catch (e: Exception) {
+                null
             }
         }
     }

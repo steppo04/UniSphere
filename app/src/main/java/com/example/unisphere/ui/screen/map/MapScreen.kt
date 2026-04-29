@@ -2,6 +2,7 @@ package com.example.unisphere.ui.screen.map
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,23 +14,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
-
-data class PointOfInterest(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val name: String,
-    val address: String,
-    val notes: String
-)
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 
 @Composable
 fun MapScreen(
@@ -38,6 +39,9 @@ fun MapScreen(
 ) {
     val state = viewModel.state
     val context = LocalContext.current
+    
+    // Configurazione osmdroid (necessaria per il corretto funzionamento dei tile)
+    Configuration.getInstance().userAgentValue = context.packageName
 
     Scaffold(
         topBar = { AppBar(title = "UniMaps", navController = navController) },
@@ -52,56 +56,108 @@ fun MapScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(16.dp)
         ) {
-            Text(
-                "I tuoi luoghi",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Pulsante per aprire un'app esterna per cercare coordinate/luoghi
-            Button(
-                onClick = {
-                    val gmmIntentUri = Uri.parse("geo:0,0?q=università")
-                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                    context.startActivity(mapIntent)
-                },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                shape = RoundedCornerShape(12.dp)
+            // Mappa OpenStreetMap (Metà superiore)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
             ) {
-                Icon(Icons.Default.Map, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Apri Mappa Esterna")
+                AndroidView(
+                    factory = { ctx ->
+                        MapView(ctx).apply {
+                            setTileSource(TileSourceFactory.MAPNIK)
+                            setMultiTouchControls(true)
+                            controller.setZoom(15.0)
+                            // Focus iniziale su Cesena
+                            val cesena = GeoPoint(44.1391, 12.2432)
+                            controller.setCenter(cesena)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    update = { mapView ->
+                        // Rimuoviamo i vecchi marker e aggiungiamo quelli attuali
+                        mapView.overlays.clear()
+                        state.pois.forEach { poi ->
+                            val marker = Marker(mapView)
+                            marker.position = GeoPoint(poi.latitude, poi.longitude)
+                            marker.title = poi.name
+                            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            marker.setOnMarkerClickListener { _, _ ->
+                                viewModel.onAction(MapAction.OnPoiSelected(poi))
+                                true
+                            }
+                            mapView.overlays.add(marker)
+                        }
+                        
+                        // Se un POI è selezionato, centra la mappa su di esso
+                        state.selectedPoi?.let { selected ->
+                            mapView.controller.animateTo(GeoPoint(selected.latitude, selected.longitude))
+                        }
+                        
+                        mapView.invalidate()
+                    }
+                )
+
+                // Card sovrapposta per i dettagli (Micro-dettagli)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = state.selectedPoi != null,
+                    enter = fadeIn() + slideInVertically { it },
+                    exit = fadeOut() + slideOutVertically { it },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+                ) {
+                    val currentPoi = state.selectedPoi
+                    if (currentPoi != null) {
+                        PoiSmallCard(
+                            poi = currentPoi,
+                            onClose = { viewModel.onAction(MapAction.OnPoiSelected(null)) },
+                            onOpenInMaps = {
+                                val uri = Uri.parse("geo:${currentPoi.latitude},${currentPoi.longitude}?q=${Uri.encode(currentPoi.address)}")
+                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                context.startActivity(intent)
+                            }
+                        )
+                    }
+                }
             }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.weight(1f)
+            // Lista dei punti salvati (Metà inferiore)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(16.dp)
             ) {
-                items(state.pois) { poi ->
-                    PoiCard(
-                        poi = poi,
-                        onClick = { viewModel.onAction(MapAction.OnPoiSelected(poi)) },
-                        onDelete = { viewModel.onAction(MapAction.OnDeletePoiClicked(poi.id)) }
-                    )
+                Text(
+                    text = "I tuoi luoghi salvati",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                if (state.pois.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nessun luogo salvato. Aggiungine uno!", color = Color.Gray)
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(state.pois) { poi ->
+                            PoiListItem(
+                                poi = poi,
+                                onClick = {
+                                    viewModel.onAction(MapAction.OnPoiSelected(poi))
+                                },
+                                onDelete = { viewModel.onAction(MapAction.OnDeletePoiClicked(poi.id)) }
+                            )
+                        }
+                    }
                 }
             }
         }
-    }
-
-    // Dialogo per visualizzare i dettagli del POI
-    if (state.selectedPoi != null) {
-        PoiDetailsDialog(
-            poi = state.selectedPoi,
-            onDismiss = { viewModel.onAction(MapAction.OnPoiSelected(null)) },
-            onOpenInMaps = {
-                val uri = Uri.parse("geo:0,0?q=${Uri.encode(state.selectedPoi!!.address)}")
-                val intent = Intent(Intent.ACTION_VIEW, uri)
-                context.startActivity(intent)
-            }
-        )
     }
 
     // Dialogo per aggiungere un nuovo POI
@@ -116,68 +172,69 @@ fun MapScreen(
 }
 
 @Composable
-fun PoiCard(poi: PointOfInterest, onClick: () -> Unit, onDelete: () -> Unit) {
-    ElevatedCard(
+fun PoiListItem(poi: PointOfInterest, onClick: () -> Unit, onDelete: () -> Unit) {
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 Icons.Default.LocationOn,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(poi.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(poi.address, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(poi.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                Text(poi.address, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1)
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Elimina", tint = Color.Gray)
+                Icon(Icons.Default.Delete, contentDescription = "Elimina", tint = Color.Red.copy(alpha = 0.6f))
             }
         }
     }
 }
 
 @Composable
-fun PoiDetailsDialog(poi: PointOfInterest, onDismiss: () -> Unit, onOpenInMaps: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(poi.name, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailRow(label = "Indirizzo", value = poi.address)
-                if (poi.notes.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text("Note:", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-                    Text(poi.notes, style = MaterialTheme.typography.bodyMedium)
+fun PoiSmallCard(poi: PointOfInterest, onClose: () -> Unit, onOpenInMaps: () -> Unit) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(poi.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Chiudi")
                 }
             }
-        },
-        confirmButton = {
-            Button(onClick = onOpenInMaps) {
-                Icon(Icons.Default.Directions, contentDescription = null)
+            Text(poi.address, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onOpenInMaps,
+                modifier = Modifier.fillMaxWidth().height(40.dp),
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Apri in Maps")
+                Text("Indicazioni", fontSize = 14.sp)
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Chiudi") }
         }
-    )
-}
-
-@Composable
-fun DetailRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Text("$label: ", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
