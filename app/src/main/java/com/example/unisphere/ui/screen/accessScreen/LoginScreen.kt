@@ -1,10 +1,12 @@
 package com.example.unisphere.ui.screen.accessScreen
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,12 +18,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.R
 import com.example.unisphere.ui.composables.NavigationRoute
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun LoginScreen(
@@ -55,14 +55,15 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- USERNAME ---
+        // --- EMAIL ---
         OutlinedTextField(
-            value = state.username,
+            value = state.email,
             onValueChange = {
-                viewModel.onAction(LoginAction.OnUsernameChanged(it))
+                viewModel.onAction(LoginAction.OnEmailChanged(it))
             },
-            label = { Text("Username") },
-            leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
             singleLine = true,
@@ -71,11 +72,11 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-
+        // --- PASSWORD ---
         OutlinedTextField(
             value = state.password,
             onValueChange = {
-                viewModel.onAction(LoginAction.OnPasswordChanged(it)) // Invia azione
+                viewModel.onAction(LoginAction.OnPasswordChanged(it))
             },
             label = { Text("Password") },
             leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
@@ -86,9 +87,10 @@ fun LoginScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             isError = state.isError
         )
+
         if (state.isError) {
             Text(
-                text = "Credenziali non corrette. Riprova.",
+                text = state.errorMessage ?: "Credenziali non corrette. Riprova.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 8.dp).align(Alignment.Start)
@@ -97,6 +99,7 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // --- BOTTONE ACCEDI ---
         Button(
             onClick = {
                 viewModel.onAction(
@@ -110,12 +113,17 @@ fun LoginScreen(
                     }
                 )
             },
+            enabled = !state.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
             shape = MaterialTheme.shapes.large
         ) {
-            Text("Accedi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (state.isLoading) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            } else {
+                Text("Accedi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

@@ -21,7 +21,7 @@ import com.example.unisphere.ui.screen.cook.RecipeDetailScreen
 fun NavGraph(navController: NavHostController) {
     NavHost(
         navController = navController,
-        startDestination = NavigationRoute.Homescreen
+        startDestination = NavigationRoute.LoginScreen
     ) {
         composable<NavigationRoute.LoginScreen> {
             LoginScreen(navController)

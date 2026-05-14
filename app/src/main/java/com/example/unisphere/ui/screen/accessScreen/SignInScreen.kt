@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
@@ -33,7 +34,7 @@ import com.example.unisphere.R
 @Composable
 fun SignInScreen(
     navController: NavHostController,
-    viewModel: SignInViewModel = viewModel()
+    viewModel: SignInViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
     val scrollState = rememberScrollState()
@@ -172,9 +173,10 @@ fun SignInScreen(
             isError = state.isError
         )
 
+        // --- MESSAGGIO DI ERRORE DINAMICO ---
         if (state.isError) {
             Text(
-                text = "Controlla i dati inseriti (Password min. 6 caratteri)",
+                text = state.errorMessage ?: "Controlla i dati inseriti.",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 8.dp).align(Alignment.Start)
@@ -183,19 +185,27 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // --- BOTTONE DI REGISTRAZIONE CON CARICAMENTO ---
         Button(
             onClick = {
                 viewModel.onAction(SignInAction.OnCreateAccountClicked) {
-                    navController.navigate(NavigationRoute.Homescreen)
+                    // Quando la registrazione ha successo naviga alla Home
+                    navController.navigate(NavigationRoute.Homescreen) {
+                        popUpTo(NavigationRoute.SignInScreen) { inclusive = true }
+                    }
                 }
             },
+            enabled = !state.isLoading, // Disabilita se sta caricando
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
             shape = MaterialTheme.shapes.large,
         ) {
-
-            Text("Crea Account", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (state.isLoading) {
+                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            } else {
+                Text("Crea Account", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -207,4 +217,4 @@ fun SignInScreen(
             }
         }
     }
-    }
+}

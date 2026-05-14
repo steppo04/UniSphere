@@ -1,6 +1,7 @@
 package com.example.unisphere.ui.screen.profile
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,27 +16,51 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
 import com.example.unisphere.ui.utils.rememberImagePicker
 
 @Composable
-fun ProfileScreen(navController: NavHostController) {
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var userName by remember { mutableStateOf("Admin") }
+fun ProfileScreen(
+    navController: NavHostController,
+    viewModel: ProfileViewModel = hiltViewModel()
+) {
+    val state = viewModel.state
+    val context = LocalContext.current
+
+    // trigger che serve a forzare Coil a ricaricare l'immagine subito dopo lo scatto
+    var refreshTrigger by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    val imageModel = remember(state.profilePictureUri, refreshTrigger) {
+        ImageRequest.Builder(context)
+            .data(state.profilePictureUri)
+            .crossfade(true)
+            .setParameter("refresh", refreshTrigger.toString())
+            .build()
+    }
+
+    // Variabili per i dialoghi
     var showEditUsernameDialog by remember { mutableStateOf(false) }
-    var currentTheme by remember { mutableStateOf("Default") }
     var showThemeDialog by remember { mutableStateOf(false) }
-    
+
     val scrollState = rememberScrollState()
 
+    // Utility per la scelta foto
     val openImagePicker = rememberImagePicker { uri ->
-        selectedImageUri = uri
+        viewModel.updateProfileImage(uri.toString())
+        // Aggiorniamo il trigger
+        refreshTrigger = System.currentTimeMillis()
     }
+
+    Log.d("DEBUG_UI", "Immagine nello stato: ${state.profilePictureUri}")
 
     Scaffold(
         topBar = { AppBar(title = "Profilo Utente", navController = navController) },
@@ -57,13 +82,14 @@ fun ProfileScreen(navController: NavHostController) {
                     .clickable { openImagePicker() },
                 contentAlignment = Alignment.BottomEnd
             ) {
-                if (selectedImageUri != null) {
+                if (state.profilePictureUri != null) {
                     AsyncImage(
-                        model = selectedImageUri,
+                        model = imageModel,
                         contentDescription = "Profile Picture",
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(CircleShape)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
                     Icon(
@@ -75,7 +101,7 @@ fun ProfileScreen(navController: NavHostController) {
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                
+
                 Surface(
                     modifier = Modifier.size(36.dp),
                     shape = CircleShape,
@@ -96,48 +122,57 @@ fun ProfileScreen(navController: NavHostController) {
             ProfileInfoItem(
                 icon = Icons.Default.Person,
                 label = "Nome Utente",
-                value = userName,
+                value = state.username.ifBlank { "Admin" },
                 onClick = { showEditUsernameDialog = true }
             )
             ProfileInfoItem(
                 icon = Icons.Default.Email,
                 label = "Email",
-                value = "admin@unisphere.com"
+                value = state.email.ifBlank { "admin@unisphere.com" }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
 
             Text(
                 text = "Impostazioni",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.align(Alignment.Start).padding(vertical = 8.dp),
+                modifier = Modifier
+                    .align(Alignment.Start)
+                    .padding(vertical = 8.dp),
                 color = MaterialTheme.colorScheme.primary
             )
 
+            // --- SETTINGS ---
             SettingsItem(
                 icon = Icons.Default.Palette,
                 title = "Tema",
-                subtitle = currentTheme,
+                subtitle = state.currentTheme,
                 onClick = { showThemeDialog = true }
             )
             SettingsItem(
                 icon = Icons.Default.Restaurant,
                 title = "Ricette preferite",
-                onClick = { /* Temporaneamente nulla */ }
+                onClick = { /* Implementazione futura */ }
             )
             SettingsItem(
                 icon = Icons.Default.Star,
                 title = "Eventi importanti",
-                onClick = { /* Temporaneamente nulla */ }
+                onClick = { /* Implementazione futura */ }
             )
 
             Spacer(modifier = Modifier.height(40.dp))
 
             Button(
                 onClick = {
-                    navController.navigate(NavigationRoute.LoginScreen) {
-                        popUpTo(0)
+                    viewModel.logout {
+                        navController.navigate(NavigationRoute.LoginScreen) {
+                            popUpTo(0)
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -145,13 +180,13 @@ fun ProfileScreen(navController: NavHostController) {
             ) {
                 Text("Logout")
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
     if (showEditUsernameDialog) {
-        var tempName by remember { mutableStateOf(userName) }
+        var tempName by remember { mutableStateOf(state.username) }
         AlertDialog(
             onDismissRequest = { showEditUsernameDialog = false },
             title = { Text("Modifica Nome Utente") },
@@ -165,16 +200,12 @@ fun ProfileScreen(navController: NavHostController) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    userName = tempName
+                    // viewModel.updateUsername(tempName)
                     showEditUsernameDialog = false
-                }) {
-                    Text("Salva")
-                }
+                }) { Text("Salva") }
             },
             dismissButton = {
-                TextButton(onClick = { showEditUsernameDialog = false }) {
-                    Text("Annulla")
-                }
+                TextButton(onClick = { showEditUsernameDialog = false }) { Text("Annulla") }
             }
         )
     }
@@ -190,18 +221,15 @@ fun ProfileScreen(navController: NavHostController) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    currentTheme = theme
+                                    viewModel.setTheme(theme)
                                     showThemeDialog = false
                                 }
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = (currentTheme == theme),
-                                onClick = {
-                                    currentTheme = theme
-                                    showThemeDialog = false
-                                }
+                                selected = (state.currentTheme == theme),
+                                onClick = null
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = theme)
@@ -215,12 +243,7 @@ fun ProfileScreen(navController: NavHostController) {
 }
 
 @Composable
-fun ProfileInfoItem(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    onClick: (() -> Unit)? = null
-) {
+fun ProfileInfoItem(icon: ImageVector, label: String, value: String, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -241,12 +264,7 @@ fun ProfileInfoItem(
 }
 
 @Composable
-fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    onClick: () -> Unit
-) {
+fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
