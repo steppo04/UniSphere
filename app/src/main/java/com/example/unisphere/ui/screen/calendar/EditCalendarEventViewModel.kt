@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.unisphere.db.SupabaseClient
 import com.example.unisphere.db.local.entity.CalendarTypeEntity
@@ -20,89 +21,54 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.LocalTime
 import java.util.Locale
 import javax.inject.Inject
 
-// --- STATO AGGIORNATO (Dinamico) ---
-data class AddCalendarEventState(
-    val title: String = "",
-    val location: String = "",
-    val description: String = "",
-    val selectedDate: LocalDate = LocalDate.now(),
-    val selectedStartTime: LocalTime = LocalTime.of(9, 0),
-    val selectedEndTime: LocalTime = LocalTime.of(10, 0),
-
-    // Gestione calendari dinamici dal DB
-    val selectedCalendarId: Int = 0,
-    val calendarTypes: List<CalendarTypeEntity> = emptyList(),
-
-    val isTypeExpanded: Boolean = false,
-    val showDatePicker: Boolean = false,
-    val showStartTimePicker: Boolean = false,
-    val showEndTimePicker: Boolean = false,
-    val isLoadingLocation: Boolean = false,
-    val isLocationExpanded: Boolean = false,
-    val locationSuggestions: List<String> = emptyList(),
-    val isSearchingSuggestions: Boolean = false
-)
-
-// --- AZIONI AGGIORNATE ---
-sealed interface AddCalendarEventAction {
-    data class OnTitleChanged(val value: String) : AddCalendarEventAction
-    data class OnLocationChanged(val value: String) : AddCalendarEventAction
-    data class OnDescriptionChanged(val value: String) : AddCalendarEventAction
-    data class OnCalendarChanged(val value: Int) : AddCalendarEventAction
-    data class OnDateChanged(val value: LocalDate) : AddCalendarEventAction
-    data class OnStartTimeChanged(val value: LocalTime) : AddCalendarEventAction
-    data class OnEndTimeChanged(val value: LocalTime) : AddCalendarEventAction
-    data class ToggleTypeExpanded(val expanded: Boolean) : AddCalendarEventAction
-    data class ToggleDatePicker(val show: Boolean) : AddCalendarEventAction
-    data class ToggleStartTimePicker(val show: Boolean) : AddCalendarEventAction
-    data class ToggleEndTimePicker(val show: Boolean) : AddCalendarEventAction
-    data class ToggleLocationExpanded(val expanded: Boolean) : AddCalendarEventAction
-
-    // Nuove azioni per gestire i tipi di calendario al volo
-    data class OnCreateCalendarType(val name: String, val colorHex: String) : AddCalendarEventAction
-    data class OnDeleteCalendarType(val calendar: CalendarTypeEntity) : AddCalendarEventAction
-
-    data object OnSaveClicked : AddCalendarEventAction
-    data object OnGetCurrentLocation : AddCalendarEventAction
-}
-
 @HiltViewModel
-class AddCalendarEventViewModel @Inject constructor(
+class EditCalendarEventViewModel @Inject constructor(
     application: Application,
-    private val eventRepository: EventRepository
+    private val repository: EventRepository,
+    savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
     var state by mutableStateOf(AddCalendarEventState())
         private set
 
+    private val eventId: Int = checkNotNull(savedStateHandle["eventId"])
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(application)
     private var searchJob: Job? = null
 
     init {
         loadUserCalendars()
+        loadEventDetails()
     }
 
     private fun loadUserCalendars() {
         viewModelScope.launch {
             val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
-            // Ascoltiamo i calendari dell'utente in tempo reale
-            eventRepository.getCalendarsForUser(uid).collectLatest { calendars ->
+            // Ascoltiamo i calendari dell'utente in tempo reale anche in modifica
+            repository.getCalendarsForUser(uid).collectLatest { calendars ->
+                state = state.copy(calendarTypes = calendars)
+            }
+        }
+    }
+
+    private fun loadEventDetails() {
+        viewModelScope.launch {
+            val event = repository.getEventById(eventId).firstOrNull()
+            if (event != null) {
                 state = state.copy(
-                    calendarTypes = calendars,
-                    // Se il calendario precedentemente selezionato non esiste più o è 0, prendiamo il primo
-                    selectedCalendarId = if (state.selectedCalendarId == 0 || calendars.none { it.id == state.selectedCalendarId }) {
-                        calendars.firstOrNull()?.id ?: 0
-                    } else {
-                        state.selectedCalendarId
-                    }
+                    title = event.title,
+                    location = event.location,
+                    description = event.description,
+                    selectedDate = event.date,
+                    selectedStartTime = event.startTime,
+                    selectedEndTime = event.endTime,
+                    selectedCalendarId = event.calendar
                 )
             }
         }
@@ -118,20 +84,23 @@ class AddCalendarEventViewModel @Inject constructor(
             is AddCalendarEventAction.OnDescriptionChanged -> state = state.copy(description = action.value)
             is AddCalendarEventAction.OnCalendarChanged -> state = state.copy(selectedCalendarId = action.value, isTypeExpanded = false)
             is AddCalendarEventAction.OnDateChanged -> state = state.copy(selectedDate = action.value, showDatePicker = false)
+
             is AddCalendarEventAction.OnStartTimeChanged -> state = state.copy(selectedStartTime = action.value, showStartTimePicker = false)
             is AddCalendarEventAction.ToggleStartTimePicker -> state = state.copy(showStartTimePicker = action.show)
+
             is AddCalendarEventAction.OnEndTimeChanged -> state = state.copy(selectedEndTime = action.value, showEndTimePicker = false)
             is AddCalendarEventAction.ToggleEndTimePicker -> state = state.copy(showEndTimePicker = action.show)
+
             is AddCalendarEventAction.ToggleTypeExpanded -> state = state.copy(isTypeExpanded = action.expanded)
             is AddCalendarEventAction.ToggleLocationExpanded -> state = state.copy(isLocationExpanded = action.expanded)
             is AddCalendarEventAction.ToggleDatePicker -> state = state.copy(showDatePicker = action.show)
 
-            // Gestione dei metodi di aggiunta ed eliminazione dei calendari
+            // Gestione dei metodi di aggiunta ed eliminazione dei calendari ereditati dall'interfaccia
             is AddCalendarEventAction.OnCreateCalendarType -> createCalendarType(action.name, action.colorHex)
             is AddCalendarEventAction.OnDeleteCalendarType -> deleteCalendarType(action.calendar)
 
             AddCalendarEventAction.OnGetCurrentLocation -> getCurrentLocation()
-            AddCalendarEventAction.OnSaveClicked -> saveEventToRoom(onBack)
+            AddCalendarEventAction.OnSaveClicked -> updateEvent(onBack)
         }
     }
 
@@ -144,35 +113,33 @@ class AddCalendarEventViewModel @Inject constructor(
                 color = colorHex,
                 userId = uid
             )
-            eventRepository.saveCalendar(newCalendar)
+            repository.saveCalendar(newCalendar)
         }
     }
 
     private fun deleteCalendarType(calendar: CalendarTypeEntity) {
         viewModelScope.launch {
-            eventRepository.deleteCalendar(calendar)
+            repository.deleteCalendar(calendar)
         }
     }
 
-    private fun saveEventToRoom(onSuccess: () -> Unit) {
+    private fun updateEvent(onSuccess: () -> Unit) {
         if (state.title.isBlank() || state.selectedCalendarId == 0) return
 
         viewModelScope.launch {
-            val uid = SupabaseClient.client.auth.currentUserOrNull()?.id
+            val eventOld = repository.getEventById(eventId).firstOrNull()
 
-            if (uid != null) {
-                val nuovoEvento = EventEntity(
-                    userUid = uid,
+            if (eventOld != null) {
+                val updatedEvent = eventOld.copy(
                     title = state.title,
                     location = state.location,
                     description = state.description,
                     date = state.selectedDate,
                     startTime = state.selectedStartTime,
                     endTime = state.selectedEndTime,
-                    calendar = state.selectedCalendarId // ID salvato correttamente
+                    calendar = state.selectedCalendarId
                 )
-
-                eventRepository.saveEvent(nuovoEvento)
+                repository.saveEvent(updatedEvent)
                 onSuccess()
             }
         }

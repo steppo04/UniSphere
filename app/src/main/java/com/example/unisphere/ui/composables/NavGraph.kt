@@ -12,6 +12,8 @@ import com.example.unisphere.ui.screen.accessScreen.LoginScreen
 import com.example.unisphere.ui.screen.accessScreen.SignInScreen
 import com.example.unisphere.ui.screen.calendar.AddCalendarEvent
 import com.example.unisphere.ui.screen.calendar.CalendarScreen
+import com.example.unisphere.ui.screen.calendar.EditCalendarEventScreen
+import com.example.unisphere.ui.screen.calendar.EventDetailScreen
 import com.example.unisphere.ui.screen.wallet.WalletScreen
 import com.example.unisphere.ui.screen.map.MapScreen
 import com.example.unisphere.ui.screen.cook.CookScreen
@@ -57,5 +59,10 @@ fun NavGraph(navController: NavHostController) {
             val route: NavigationRoute.RecipeDetailScreen = backStackEntry.toRoute()
             RecipeDetailScreen(recipeId = route.recipeId, navController = navController)
         }
+        composable<NavigationRoute.EventDetailScreen> {
+            EventDetailScreen(navController)
+        }
+        composable<NavigationRoute.EditCalendarEventScreen> {
+            EditCalendarEventScreen(navController) }
     }
 }

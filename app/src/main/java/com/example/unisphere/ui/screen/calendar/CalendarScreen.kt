@@ -19,19 +19,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.example.unisphere.db.local.entity.EventEntity
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
+import com.kizitonwose.calendar.compose.CalendarState as LibCalendarState
 import com.kizitonwose.calendar.core.CalendarDay
 import com.kizitonwose.calendar.core.DayPosition
 import com.kizitonwose.calendar.core.daysOfWeek
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -39,7 +44,7 @@ import java.util.Locale
 @Composable
 fun CalendarScreen(
     navController: NavHostController,
-    viewModel: CalendarViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    viewModel: CalendarViewModel = hiltViewModel()
 ) {
     val uiState = viewModel.state
     val configuration = LocalConfiguration.current
@@ -58,7 +63,7 @@ fun CalendarScreen(
 
     Scaffold(
         topBar = { AppBar(title = "UniCalendar", navController) },
-        bottomBar = { BottomNavigationBar(navController) },
+        bottomBar = { BottomNavigationBar(navController = navController) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(NavigationRoute.AddCalendarEvent) },
@@ -84,12 +89,15 @@ fun CalendarScreen(
                     CalendarHeaderSection(calendarState.firstVisibleMonth.yearMonth)
                     CalendarGridCard(calendarState, daysOfWeek, uiState, viewModel)
                 }
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .verticalScroll(rememberScrollState())
                         .padding(8.dp)
                 ) {
-                    EventListSection(uiState)
+                    EventListSection(uiState, navController)
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         } else {
@@ -102,9 +110,115 @@ fun CalendarScreen(
             ) {
                 CalendarHeaderSection(calendarState.firstVisibleMonth.yearMonth)
                 CalendarGridCard(calendarState, daysOfWeek, uiState, viewModel)
-                EventListSection(uiState)
+                EventListSection(uiState, navController)
                 Spacer(modifier = Modifier.height(80.dp))
             }
+        }
+    }
+}
+
+@Composable
+fun EventListSection(uiState: CalendarState, navController: NavHostController) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            text = "Eventi del ${uiState.selectedDate.dayOfMonth} ${uiState.selectedDate.month.getDisplayName(TextStyle.FULL, Locale.ITALY)}",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+        )
+
+        if (uiState.events.isEmpty()) {
+            Text(
+                text = "Nessun impegno",
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+            )
+        } else {
+            uiState.events.forEachIndexed { index, evento ->
+                // Cerchiamo il tipo di calendario associato all'evento per prenderne il codice colore Hex reale
+                val matchedCalendar = uiState.calendars.find { it.id == evento.calendar }
+                val calendarColorHex = matchedCalendar?.color ?: "#8E8E93" // Fallback grigio se non trovato
+
+                EventCard(event = evento, calendarColorHex = calendarColorHex, navController = navController)
+
+                if (index < uiState.events.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 24.dp, top = 4.dp, bottom = 4.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EventCard(event: EventEntity, calendarColorHex: String, navController: NavHostController) {
+    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+    // Parsificazione sicura del colore esadecimale dinamico
+    val barColor = remember(calendarColorHex) {
+        try {
+            Color(android.graphics.Color.parseColor(calendarColorHex))
+        } catch (_: Exception) {
+            Color.Gray
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { navController.navigate(NavigationRoute.EventDetailScreen(eventId = event.id)) }
+            .padding(vertical = 10.dp, horizontal = 8.dp)
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.Top
+    ) {
+        // --- BARRA VERTICALE COLORATA DINAMICA ---
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(2.dp))
+                .background(barColor)
+        )
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        // --- CONTENUTO (Titolo e Luogo) ---
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = event.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (event.location.isNotBlank()) {
+                Text(
+                    text = event.location,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // --- ORARIO (Inizio - Fine) ---
+        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
+            Text(
+                text = event.startTime.format(timeFormatter),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = event.endTime.format(timeFormatter),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray
+            )
         }
     }
 }
@@ -142,22 +256,6 @@ fun DayElement(day: CalendarDay, isSelected: Boolean, isToday: Boolean, onClick:
 }
 
 @Composable
-fun EventCard(title: String, time: String) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
-            Spacer(Modifier.width(12.dp))
-            Text(title, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
-            Text(time, style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@Composable
 fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         for (dayOfWeek in daysOfWeek) {
@@ -171,6 +269,7 @@ fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
         }
     }
 }
+
 @Composable
 fun CalendarHeaderSection(visibleMonth: YearMonth) {
     Column(modifier = Modifier.padding(20.dp)) {
@@ -190,15 +289,16 @@ fun CalendarHeaderSection(visibleMonth: YearMonth) {
 
 @Composable
 fun CalendarGridCard(
-    state: com.kizitonwose.calendar.compose.CalendarState,
+    state: LibCalendarState,
     daysOfWeek: List<DayOfWeek>,
     uiState: CalendarState,
     viewModel: CalendarViewModel
 ) {
     Card(
         modifier = Modifier.padding(horizontal = 16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceBright)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = CardDefaults.outlinedCardBorder(),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Column(modifier = Modifier.padding(bottom = 12.dp)) {
             DaysOfWeekTitle(daysOfWeek = daysOfWeek)
@@ -213,27 +313,6 @@ fun CalendarGridCard(
                     )
                 }
             )
-        }
-    }
-}
-
-@Composable
-fun EventListSection(uiState: CalendarState) {
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Text(
-            text = "Eventi del ${uiState.selectedDate.dayOfMonth} ${uiState.selectedDate.month.getDisplayName(TextStyle.FULL, Locale.ITALY)}",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        if (uiState.events.isEmpty()) {
-            Text("Nessun evento", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
-        } else {
-            uiState.events.forEach { (title, time) ->
-                EventCard(title, time)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
         }
     }
 }

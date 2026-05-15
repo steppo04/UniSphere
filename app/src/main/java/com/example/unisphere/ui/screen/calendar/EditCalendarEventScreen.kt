@@ -43,9 +43,9 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddCalendarEvent(
+fun EditCalendarEventScreen(
     navController: NavHostController,
-    viewModel: AddCalendarEventViewModel = hiltViewModel()
+    viewModel: EditCalendarEventViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
     val context = LocalContext.current
@@ -57,7 +57,9 @@ fun AddCalendarEvent(
 
     // Cerchiamo l'oggetto calendario selezionato per mostrare nome e colore nella UI
     val selectedCalendar = state.calendarTypes.find { it.id == state.selectedCalendarId }
+    val selectedCalendarName = selectedCalendar?.name ?: "Seleziona Calendario"
 
+    // Permessi per la localizzazione
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -67,10 +69,10 @@ fun AddCalendarEvent(
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(), // Gestisce lo spazio della tastiera
+        modifier = Modifier.imePadding(), // Spinge i bottoni sopra la tastiera
         topBar = {
             TopAppBar(
-                title = { Text("Aggiungi Evento", fontWeight = FontWeight.Bold) },
+                title = { Text("Modifica Evento", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro")
@@ -84,6 +86,7 @@ fun AddCalendarEvent(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp)
+                // Chiude la tastiera se clicchi in un punto vuoto della colonna
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { focusManager.clearFocus() })
                 }
@@ -111,24 +114,25 @@ fun AddCalendarEvent(
                 onExpandedChange = { viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(it)) }
             ) {
                 OutlinedTextField(
-                    value = selectedCalendar?.name ?: "Seleziona Calendario",
+                    value = selectedCalendarName,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Calendario") },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
                     leadingIcon = {
-                        selectedCalendar?.let {
+                        selectedCalendar?.let { cal ->
                             Box(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clip(CircleShape)
-                                    .background(Color(android.graphics.Color.parseColor(it.color)))
+                                    .background(Color(android.graphics.Color.parseColor(cal.color)))
                             )
                         } ?: Icon(Icons.Default.Category, contentDescription = null)
                     },
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isTypeExpanded) },
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                 )
+
                 ExposedDropdownMenu(
                     expanded = state.isTypeExpanded,
                     onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(false)) }
@@ -268,17 +272,12 @@ fun AddCalendarEvent(
                     onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false)) }
                 ) {
                     DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.MyLocation, null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(12.dp))
-                                Text("Posizione attuale", fontWeight = FontWeight.Bold)
-                            }
-                        },
+                        text = { Text("Posizione attuale", fontWeight = FontWeight.Bold) },
+                        leadingIcon = { Icon(Icons.Default.MyLocation, null, tint = MaterialTheme.colorScheme.primary) },
                         onClick = {
                             viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false))
-                            val fineLoc = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                            if (fineLoc) viewModel.onAction(AddCalendarEventAction.OnGetCurrentLocation)
+                            val hasLoc = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                            if (hasLoc) viewModel.onAction(AddCalendarEventAction.OnGetCurrentLocation)
                             else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
                         }
                     )
@@ -301,19 +300,16 @@ fun AddCalendarEvent(
                 onValueChange = { viewModel.onAction(AddCalendarEventAction.OnDescriptionChanged(it)) },
                 label = { Text("Note aggiuntive") },
                 modifier = Modifier.fillMaxWidth().height(120.dp),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Done
-                ),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- BOTTONE SALVA ---
+            // --- BOTTONE AGGIORNA ---
             Button(
                 onClick = {
-                    focusManager.clearFocus()
+                    focusManager.clearFocus() // Chiude tastiera prima di salvare
                     viewModel.onAction(AddCalendarEventAction.OnSaveClicked) {
                         navController.popBackStack()
                     }
@@ -322,8 +318,9 @@ fun AddCalendarEvent(
                 shape = RoundedCornerShape(12.dp),
                 enabled = state.title.isNotBlank() && state.selectedCalendarId != 0
             ) {
-                Text("Salva Evento", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Aggiorna Evento", fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
+
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
@@ -404,7 +401,7 @@ fun AddCalendarEvent(
         )
     }
 
-    // --- DIALOGS STANDARD (DatePicker e TimePickers) ---
+    // --- DIALOGS (DatePicker e TimePickers) ---
     if (state.showDatePicker) {
         val datePickerState = rememberDatePickerState()
         DatePickerDialog(

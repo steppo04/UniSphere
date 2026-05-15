@@ -4,7 +4,10 @@ import com.example.unisphere.db.local.AppDatabase
 import com.example.unisphere.db.local.dao.UserDao
 import android.content.Context
 import androidx.room.Room
+import com.example.unisphere.db.local.dao.CalendarDao
+import com.example.unisphere.db.local.dao.EventDao
 import com.example.unisphere.repository.UserRepository
+import com.example.unisphere.repository.EventRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,11 +35,32 @@ object DatabaseModule {
     fun provideUserDao(database: AppDatabase): UserDao {
         return database.userDao()
     }
+    @Provides
+    fun provideEventDao(database: AppDatabase): EventDao {
+        return database.eventDao()
+    }
+    @Provides
+    fun provideCalendarDao(database: AppDatabase): CalendarDao {
+        return database.calendarDao()
+    }
+
 
     // 3. Diciamo ad Hilt come costruire il Repository (gli passiamo il DAO in automatico!)
     @Provides
     @Singleton
     fun provideUserRepository(userDao: UserDao): UserRepository {
         return UserRepository(userDao)
+    }
+    @Provides
+    @Singleton
+    fun provideEventRepository(
+        eventDao: EventDao,
+        calendarDao: CalendarDao
+    ): EventRepository {
+        // Ora possiamo passarlo in modo sicuro senza usare il TODO()
+        return EventRepository(
+            eventDao = eventDao,
+            calendarDao = calendarDao
+        )
     }
 }

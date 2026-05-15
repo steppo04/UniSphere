@@ -13,5 +13,8 @@ sealed interface NavigationRoute {
     @Serializable data object AddCalendarEvent : NavigationRoute
     @Serializable data object MapScreen : NavigationRoute
     @Serializable data object CookScreen : NavigationRoute
+    @Serializable data class EventDetailScreen(val eventId: Int) : NavigationRoute
     @Serializable data class RecipeDetailScreen(val recipeId: Int) : NavigationRoute
+
+    @Serializable data class EditCalendarEventScreen(val eventId: Int) : NavigationRoute
 }
