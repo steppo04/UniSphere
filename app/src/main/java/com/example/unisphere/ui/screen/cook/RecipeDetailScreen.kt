@@ -1,37 +1,21 @@
 package com.example.unisphere.ui.screen.cook
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
-import coil.compose.AsyncImage
-import io.ktor.client.*
-import io.ktor.client.call.*
-import io.ktor.client.engine.okhttp.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.serialization.kotlinx.json.*
+import com.example.unisphere.db.SupabaseClient
+import com.example.unisphere.db.local.entity.FavoriteRecipeEntity
+import com.example.unisphere.repository.RecipeRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import javax.inject.Inject
 
 @Serializable
 data class RecipeDetail(
@@ -50,128 +34,78 @@ data class Ingredient(
     val original: String
 )
 
-class RecipeDetailViewModel : ViewModel() {
-    var recipe by mutableStateOf<RecipeDetail?>(null)
-        private set
-    var isLoading by mutableStateOf(false)
-        private set
+data class RecipeDetailState(
+    val recipe: RecipeDetail? = null,
+    val isLoading: Boolean = true,
+    val isFavorite: Boolean = false,
+    val error: String? = null
+)
 
-    private val client = HttpClient(OkHttp) {
-        install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                coerceInputValues = true
-            })
-        }
-    }
-
-    private val apiKey = "e09429ff9b1c4c3ca2e6e4318890b313"
-
-    fun fetchRecipeDetails(id: Int) {
-        viewModelScope.launch {
-            isLoading = true
-            try {
-                val response: RecipeDetail = client.get("https://api.spoonacular.com/recipes/$id/information") {
-                    parameter("apiKey", apiKey)
-                }.body()
-                recipe = response
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                isLoading = false
-            }
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        client.close()
-    }
+sealed interface RecipeDetailAction {
+    object OnToggleFavorite : RecipeDetailAction
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun RecipeDetailScreen(
-    recipeId: Int,
-    navController: NavHostController,
-    viewModel: RecipeDetailViewModel = viewModel()
-) {
-    LaunchedEffect(recipeId) {
-        viewModel.fetchRecipeDetails(recipeId)
+@HiltViewModel
+class RecipeDetailViewModel @Inject constructor(
+    application: Application,
+    private val repository: RecipeRepository,
+    savedStateHandle: SavedStateHandle
+) : AndroidViewModel(application) {
+
+    var state by mutableStateOf(RecipeDetailState())
+        private set
+
+    private val recipeId: Int = checkNotNull(savedStateHandle["recipeId"])
+    private val currentUserId = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
+
+    init {
+        fetchRecipeDetails()
+        observeFavoriteStatus()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Dettaglio Ricetta", maxLines = 1) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Indietro")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        if (viewModel.isLoading) {
-            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+    private fun fetchRecipeDetails() {
+        viewModelScope.launch {
+            state = state.copy(isLoading = true, error = null)
+            try {
+                val details = repository.getRecipeDetails(recipeId)
+                state = state.copy(recipe = details, isLoading = false)
+            } catch (e: Exception) {
+                state = state.copy(isLoading = false, error = "Impossibile caricare i dettagli della ricetta")
+                e.printStackTrace()
             }
-        } else {
-            viewModel.recipe?.let { recipe ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    AsyncImage(
-                        model = recipe.image,
-                        contentDescription = recipe.title,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(250.dp),
-                        contentScale = ContentScale.Crop
-                    )
-                    
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = recipe.title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        Spacer(Modifier.height(8.dp))
-                        
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("${recipe.readyInMinutes} min", style = MaterialTheme.typography.bodyMedium)
-                            
-                            Spacer(Modifier.width(16.dp))
-                            
-                            Icon(Icons.Default.Restaurant, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("${recipe.servings} porzioni", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        
-                        Spacer(Modifier.height(24.dp))
-                        
-                        Text("Ingredienti", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        recipe.extendedIngredients.forEach { ingredient ->
-                            Text("• ${ingredient.original}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(vertical = 4.dp))
-                        }
-                        
-                        Spacer(Modifier.height(24.dp))
-                        
-                        Text("Istruzioni", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = recipe.instructions?.replace(Regex("<[^>]*>"), "") ?: "Nessuna istruzione disponibile.",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
+        }
+    }
+
+    private fun observeFavoriteStatus() {
+        viewModelScope.launch {
+            repository.isFavorite(recipeId, currentUserId).collectLatest { favorite ->
+                state = state.copy(isFavorite = favorite)
+            }
+        }
+    }
+
+    fun onAction(action: RecipeDetailAction) {
+        when (action) {
+            RecipeDetailAction.OnToggleFavorite -> toggleFavorite()
+        }
+    }
+
+    private fun toggleFavorite() {
+        val currentRecipe = state.recipe ?: return
+        viewModelScope.launch {
+            val favoriteEntity = FavoriteRecipeEntity(
+                id = currentRecipe.id,
+                userUid = currentUserId,
+                title = currentRecipe.title,
+                image = currentRecipe.image,
+                readyInMinutes = currentRecipe.readyInMinutes,
+                servings = currentRecipe.servings
+            )
+
+            if (state.isFavorite) {
+                repository.removeFavorite(favoriteEntity)
+            } else {
+                repository.saveFavorite(favoriteEntity)
             }
         }
     }

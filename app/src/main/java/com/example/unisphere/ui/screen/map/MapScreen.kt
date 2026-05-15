@@ -1,8 +1,11 @@
 package com.example.unisphere.ui.screen.map
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
-import androidx.compose.animation.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,8 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.PopupProperties
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.example.unisphere.db.local.entity.PointOfInterestEntity
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import org.osmdroid.config.Configuration
@@ -32,16 +37,26 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     navController: NavHostController,
-    viewModel: MapViewModel = viewModel()
+    viewModel: MapViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
     val context = LocalContext.current
-    
-    // Configurazione osmdroid (necessaria per il corretto funzionamento dei tile)
+
     Configuration.getInstance().userAgentValue = context.packageName
+
+    // --- SEZIONE PERMESSI RUNTME ANDROID ---
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.any { it }) {
+            // Se l'utente concede il permesso, avvia il recupero della posizione
+            viewModel.onAction(MapAction.OnUseCurrentLocation)
+        }
+    }
 
     Scaffold(
         topBar = { AppBar(title = "UniMaps", navController = navController) },
@@ -70,14 +85,12 @@ fun MapScreen(
                             setTileSource(TileSourceFactory.MAPNIK)
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
-                            // Focus iniziale su Cesena
                             val cesena = GeoPoint(44.1391, 12.2432)
                             controller.setCenter(cesena)
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
                     update = { mapView ->
-                        // Rimuoviamo i vecchi marker e aggiungiamo quelli attuali
                         mapView.overlays.clear()
                         state.pois.forEach { poi ->
                             val marker = Marker(mapView)
@@ -90,31 +103,28 @@ fun MapScreen(
                             }
                             mapView.overlays.add(marker)
                         }
-                        
-                        // Se un POI è selezionato, centra la mappa su di esso
+
                         state.selectedPoi?.let { selected ->
                             mapView.controller.animateTo(GeoPoint(selected.latitude, selected.longitude))
                         }
-                        
+
                         mapView.invalidate()
                     }
                 )
 
-                // Card sovrapposta per i dettagli (Micro-dettagli)
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = state.selectedPoi != null,
-                    enter = fadeIn() + slideInVertically { it },
-                    exit = fadeOut() + slideOutVertically { it },
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
-                ) {
-                    val currentPoi = state.selectedPoi
-                    if (currentPoi != null) {
+                if (state.selectedPoi != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 16.dp)
+                            .fillMaxWidth()
+                    ) {
                         PoiSmallCard(
-                            poi = currentPoi,
+                            poi = state.selectedPoi,
                             onClose = { viewModel.onAction(MapAction.OnPoiSelected(null)) },
                             onOpenInMaps = {
-                                val uri = Uri.parse("geo:${currentPoi.latitude},${currentPoi.longitude}?q=${Uri.encode(currentPoi.address)}")
-                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                val intentUri = Uri.parse("geo:${state.selectedPoi.latitude},${state.selectedPoi.longitude}?q=${Uri.encode(state.selectedPoi.address)}")
+                                val intent = Intent(Intent.ACTION_VIEW, intentUri)
                                 context.startActivity(intent)
                             }
                         )
@@ -145,13 +155,11 @@ fun MapScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(state.pois) { poi ->
+                        items(state.pois, key = { it.id }) { poi ->
                             PoiListItem(
                                 poi = poi,
-                                onClick = {
-                                    viewModel.onAction(MapAction.OnPoiSelected(poi))
-                                },
-                                onDelete = { viewModel.onAction(MapAction.OnDeletePoiClicked(poi.id)) }
+                                onClick = { viewModel.onAction(MapAction.OnPoiSelected(poi)) },
+                                onDelete = { viewModel.onAction(MapAction.OnDeletePoiClicked(poi)) }
                             )
                         }
                     }
@@ -160,19 +168,30 @@ fun MapScreen(
         }
     }
 
-    // Dialogo per aggiungere un nuovo POI
     if (state.showAddDialog) {
         AddPoiDialog(
             state = state,
             onAction = viewModel::onAction,
             onDismiss = { viewModel.onAction(MapAction.OnDismissAddDialog) },
-            onConfirm = { viewModel.onAction(MapAction.OnSavePoiClicked) }
+            onConfirm = { viewModel.onAction(MapAction.OnSavePoiClicked) },
+            onLocationRequest = {
+                // Controllo preliminare se i permessi sono già stati accordati in passato
+                val fineLocationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                val coarseLocationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+                if (fineLocationGranted || coarseLocationGranted) {
+                    viewModel.onAction(MapAction.OnUseCurrentLocation)
+                } else {
+                    // Altrimenti lancia il pop-up di richiesta permessi di sistema
+                    permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                }
+            }
         )
     }
 }
 
 @Composable
-fun PoiListItem(poi: PointOfInterest, onClick: () -> Unit, onDelete: () -> Unit) {
+fun PoiListItem(poi: PointOfInterestEntity, onClick: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,7 +222,7 @@ fun PoiListItem(poi: PointOfInterest, onClick: () -> Unit, onDelete: () -> Unit)
 }
 
 @Composable
-fun PoiSmallCard(poi: PointOfInterest, onClose: () -> Unit, onOpenInMaps: () -> Unit) {
+fun PoiSmallCard(poi: PointOfInterestEntity, onClose: () -> Unit, onOpenInMaps: () -> Unit) {
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -244,7 +263,8 @@ fun AddPoiDialog(
     state: MapState,
     onAction: (MapAction) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    onLocationRequest: () -> Unit // Callback delegata al check dei permessi
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -254,7 +274,7 @@ fun AddPoiDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuovo Punto di Interesse") },
+        title = { Text("Nuovo Punto di Interesse", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -268,7 +288,7 @@ fun AddPoiDialog(
                 Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = state.newPoiAddress,
-                        onValueChange = { 
+                        onValueChange = {
                             onAction(MapAction.OnAddressChanged(it))
                             expanded = it.length >= 3
                         },
@@ -278,13 +298,13 @@ fun AddPoiDialog(
                             if (state.isLocating) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                             } else {
-                                IconButton(onClick = { onAction(MapAction.OnUseCurrentLocation) }) {
+                                IconButton(onClick = onLocationRequest) { // <--- ORA CHIAMA IL VERIFICATORE DEI PERMESSI
                                     Icon(Icons.Default.MyLocation, contentDescription = "Usa posizione attuale")
                                 }
                             }
                         }
                     )
-                    
+
                     DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false },

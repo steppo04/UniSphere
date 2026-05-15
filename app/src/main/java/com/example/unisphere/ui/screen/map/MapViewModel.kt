@@ -10,46 +10,30 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.unisphere.db.SupabaseClient
+import com.example.unisphere.db.local.entity.PointOfInterestEntity
+import com.example.unisphere.repository.PoiRepository
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import dagger.hilt.android.lifecycle.HiltViewModel
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import javax.inject.Inject
 import kotlin.coroutines.resume
 
-data class PointOfInterest(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val name: String,
-    val address: String,
-    val notes: String,
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0
-)
-
+// --- STATO AGGIORNATO (Gestisce le Entity reali) ---
 data class MapState(
-    val pois: List<PointOfInterest> = listOf(
-        PointOfInterest(
-            name = "Campus Cesena",
-            address = "Via dell'Università, 50, Cesena",
-            notes = "Sede principale dei corsi di Informatica.",
-            latitude = 44.1481,
-            longitude = 12.2359
-        ),
-        PointOfInterest(
-            name = "Mensa Universitaria Cesena",
-            address = "Via Pasi, 30, Cesena",
-            notes = "Mensa per studenti universitari.",
-            latitude = 44.1465,
-            longitude = 12.2415
-        )
-    ),
+    val pois: List<PointOfInterestEntity> = emptyList(),
     val showAddDialog: Boolean = false,
-    val selectedPoi: PointOfInterest? = null,
+    val selectedPoi: PointOfInterestEntity? = null,
     val newPoiName: String = "",
     val newPoiAddress: String = "",
     val newPoiNotes: String = "",
@@ -58,6 +42,7 @@ data class MapState(
     val isSearchingSuggestions: Boolean = false
 )
 
+// --- AZIONI AGGIORNATE ---
 sealed interface MapAction {
     data class OnNameChanged(val value: String) : MapAction
     data class OnAddressChanged(val value: String) : MapAction
@@ -65,44 +50,64 @@ sealed interface MapAction {
     data object OnSavePoiClicked : MapAction
     data object OnAddPoiClicked : MapAction
     data object OnDismissAddDialog : MapAction
-    data class OnDeletePoiClicked(val id: String) : MapAction
-    data class OnPoiSelected(val poi: PointOfInterest?) : MapAction
+    data class OnDeletePoiClicked(val poi: PointOfInterestEntity) : MapAction // Passiamo l'entità completa per eliminarla al volo
+    data class OnPoiSelected(val poi: PointOfInterestEntity?) : MapAction
     data class OnSuggestionSelected(val address: String) : MapAction
     data object OnUseCurrentLocation : MapAction
 }
 
-class MapViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class MapViewModel @Inject constructor(
+    application: Application,
+    private val poiRepository: PoiRepository
+) : AndroidViewModel(application) {
+
     var state by mutableStateOf(MapState())
         private set
 
     private var searchJob: Job? = null
     private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(application)
 
+    init {
+        loadUserPois()
+    }
+
+    private fun loadUserPois() {
+        val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
+        viewModelScope.launch {
+            // Ascoltiamo i punti salvati nel database locale in tempo reale
+            poiRepository.getPois(uid).collectLatest { list ->
+                state = state.copy(pois = list)
+            }
+        }
+    }
+
     fun onAction(action: MapAction) {
         when (action) {
-            is MapAction.OnNameChanged -> {
-                state = state.copy(newPoiName = action.value)
-            }
+            is MapAction.OnNameChanged -> state = state.copy(newPoiName = action.value)
             is MapAction.OnAddressChanged -> {
                 state = state.copy(newPoiAddress = action.value)
                 fetchAddressSuggestions(action.value)
             }
-            is MapAction.OnNotesChanged -> {
-                state = state.copy(newPoiNotes = action.value)
-            }
+            is MapAction.OnNotesChanged -> state = state.copy(newPoiNotes = action.value)
+
             MapAction.OnSavePoiClicked -> {
+                val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: return
                 if (state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank()) {
                     viewModelScope.launch {
                         val coords = getCoordinatesFromAddress(state.newPoiAddress)
-                        val newPoi = PointOfInterest(
+                        val newPoi = PointOfInterestEntity(
+                            userUid = uid,
                             name = state.newPoiName,
                             address = state.newPoiAddress,
                             notes = state.newPoiNotes,
                             latitude = coords?.first ?: 0.0,
                             longitude = coords?.second ?: 0.0
                         )
+                        poiRepository.savePoi(newPoi)
+
+                        // Ripristiniamo i campi del form
                         state = state.copy(
-                            pois = state.pois + newPoi,
                             showAddDialog = false,
                             newPoiName = "",
                             newPoiAddress = "",
@@ -112,9 +117,7 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-            MapAction.OnAddPoiClicked -> {
-                state = state.copy(showAddDialog = true)
-            }
+            MapAction.OnAddPoiClicked -> state = state.copy(showAddDialog = true)
             MapAction.OnDismissAddDialog -> {
                 state = state.copy(
                     showAddDialog = false,
@@ -125,38 +128,35 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             is MapAction.OnDeletePoiClicked -> {
-                state = state.copy(pois = state.pois.filter { it.id != action.id })
+                viewModelScope.launch {
+                    poiRepository.deletePoi(action.poi)
+                    if (state.selectedPoi?.id == action.poi.id) {
+                        state = state.copy(selectedPoi = null)
+                    }
+                }
             }
-            is MapAction.OnPoiSelected -> {
-                state = state.copy(selectedPoi = action.poi)
-            }
-            is MapAction.OnSuggestionSelected -> {
-                state = state.copy(newPoiAddress = action.address, addressSuggestions = emptyList())
-            }
-            MapAction.OnUseCurrentLocation -> {
-                getCurrentLocation()
-            }
+            is MapAction.OnPoiSelected -> state = state.copy(selectedPoi = action.poi)
+            is MapAction.OnSuggestionSelected -> state = state.copy(newPoiAddress = action.address, addressSuggestions = emptyList())
+            MapAction.OnUseCurrentLocation -> getCurrentLocation()
         }
     }
 
+    // --- GEOCODER & GPS LOGIC ---
     private fun fetchAddressSuggestions(query: String) {
         if (query.length < 3) {
             state = state.copy(addressSuggestions = emptyList())
             return
         }
-
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(500)
             state = state.copy(isSearchingSuggestions = true)
-
             try {
                 val geocoder = Geocoder(getApplication(), Locale.getDefault())
                 val addresses = withContext(Dispatchers.IO) {
                     @Suppress("DEPRECATION")
                     geocoder.getFromLocationName(query, 5)
                 }
-
                 val suggestions = addresses?.mapNotNull { it.getAddressLine(0) } ?: emptyList()
                 state = state.copy(addressSuggestions = suggestions)
             } catch (e: Exception) {
@@ -173,12 +173,8 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 @Suppress("DEPRECATION")
                 val addresses = geocoder.getFromLocationName(addressName, 1)
-                addresses?.firstOrNull()?.let {
-                    Pair(it.latitude, it.longitude)
-                }
-            } catch (e: Exception) {
-                null
-            }
+                addresses?.firstOrNull()?.let { Pair(it.latitude, it.longitude) }
+            } catch (e: Exception) { null }
         }
     }
 
@@ -187,16 +183,10 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             state = state.copy(isLocating = true)
             try {
-                val result = fusedLocationClient.getCurrentLocation(
-                    Priority.PRIORITY_HIGH_ACCURACY,
-                    null
-                ).await()
-
+                val result = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
                 result?.let { location ->
                     val addressName = getAddressFromLocation(location.latitude, location.longitude)
-                    if (addressName != null) {
-                        state = state.copy(newPoiAddress = addressName)
-                    }
+                    if (addressName != null) state = state.copy(newPoiAddress = addressName)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -208,7 +198,6 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun getAddressFromLocation(latitude: Double, longitude: Double): String? {
         val geocoder = Geocoder(getApplication(), Locale.getDefault())
-        
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             suspendCancellableCoroutine { continuation ->
                 try {
@@ -220,18 +209,14 @@ class MapViewModel(application: Application) : AndroidViewModel(application) {
                             continuation.resume(null)
                         }
                     })
-                } catch (e: Exception) {
-                    continuation.resume(null)
-                }
+                } catch (e: Exception) { continuation.resume(null) }
             }
         } else {
             withContext(Dispatchers.IO) {
                 try {
                     @Suppress("DEPRECATION")
                     geocoder.getFromLocation(latitude, longitude, 1)?.firstOrNull()?.getAddressLine(0)
-                } catch (e: Exception) {
-                    null
-                }
+                } catch (e: Exception) { null }
             }
         }
     }

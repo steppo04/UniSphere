@@ -9,8 +9,12 @@ import com.example.unisphere.db.local.dao.CalendarDao
 import com.example.unisphere.db.local.dao.WalletDao
 import com.example.unisphere.db.local.entity.TransactionCategoryEntity
 import com.example.unisphere.db.local.entity.TransactionEntity
+import com.example.unisphere.db.local.entity.FavoriteRecipeEntity
+import com.example.unisphere.db.local.entity.PointOfInterestEntity
 import com.example.unisphere.db.local.dao.UserDao
 import com.example.unisphere.db.local.dao.EventDao
+import com.example.unisphere.db.local.dao.PoiDao
+import com.example.unisphere.db.local.dao.RecipeDao
 import com.example.unisphere.db.local.entity.UserEntity
 import com.example.unisphere.db.local.entity.EventEntity
 import com.example.unisphere.db.local.entity.CalendarTypeEntity // Assicurati che l'import sia corretto
@@ -22,9 +26,11 @@ import com.example.unisphere.ui.utils.CalendarConverters
         EventEntity::class,
         CalendarTypeEntity::class,
         TransactionEntity::class,
-        TransactionCategoryEntity::class
+        TransactionCategoryEntity::class,
+        FavoriteRecipeEntity::class,
+        PointOfInterestEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(CalendarConverters::class)
@@ -37,6 +43,10 @@ abstract class AppDatabase : RoomDatabase() {
 
     // 3. Corretto il nome della funzione in minuscolo (camelCase)
     abstract fun calendarDao(): CalendarDao
+
+    abstract fun recipeDao(): RecipeDao
+
+    abstract fun poiDao(): PoiDao
 
     companion object {
         @Volatile

@@ -19,18 +19,106 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import com.example.unisphere.repository.RecipeRepository
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import javax.inject.Inject
 
+// --- MODELLI DATI PER LA RICERCA ---
+@Serializable
+data class Recipe(
+    val id: Int,
+    val title: String,
+    val image: String,
+    val readyInMinutes: Int = 0,
+    val servings: Int = 0
+)
+
+@Serializable
+data class RecipeResponse(
+    val results: List<Recipe>
+)
+
+// --- STATO E AZIONI ---
+data class CookState(
+    val recipes: List<Recipe> = emptyList(),
+    val searchQuery: String = "",
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
+sealed interface CookAction {
+    data class OnSearchQueryChanged(val query: String) : CookAction
+    data object OnRetryClicked : CookAction
+}
+
+// --- VIEWMODEL AGGIORNATO CON REPOSITORY ---
+@HiltViewModel
+class CookViewModel @Inject constructor(
+    application: android.app.Application,
+    private val repository: RecipeRepository
+) : AndroidViewModel(application) {
+
+    var state by mutableStateOf(CookState())
+        private set
+
+    private var searchJob: Job? = null
+
+    init {
+        fetchRecipes()
+    }
+
+    fun onAction(action: CookAction) {
+        when (action) {
+            is CookAction.OnSearchQueryChanged -> {
+                state = state.copy(searchQuery = action.query)
+                debouncedSearch(action.query)
+            }
+            CookAction.OnRetryClicked -> {
+                fetchRecipes(state.searchQuery)
+            }
+        }
+    }
+
+    private fun debouncedSearch(query: String) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(500)
+            fetchRecipes(query)
+        }
+    }
+
+    private fun fetchRecipes(query: String = "") {
+        viewModelScope.launch {
+            state = state.copy(isLoading = true, error = null)
+            try {
+                val response = repository.searchRecipes(query)
+                state = state.copy(recipes = response.results, isLoading = false)
+            } catch (e: Exception) {
+                state = state.copy(isLoading = false, error = "Errore durante il caricamento delle ricette")
+                e.printStackTrace()
+            }
+        }
+    }
+}
+
+// --- INTERFACCIA GRAFICA ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CookScreen(
     navController: NavHostController,
-    viewModel: CookViewModel = viewModel()
+    viewModel: CookViewModel = hiltViewModel() // Sostituito con hiltViewModel() obbligatorio
 ) {
     val state = viewModel.state
 
@@ -44,7 +132,6 @@ fun CookScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Barra di Ricerca
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = { viewModel.onAction(CookAction.OnSearchQueryChanged(it)) },
@@ -62,7 +149,6 @@ fun CookScreen(
                 }
             )
 
-            // Contenuto Principale
             if (state.recipes.isEmpty() && !state.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -9,14 +9,22 @@ import com.example.unisphere.db.local.dao.WalletDao
 import com.example.unisphere.repository.WalletRepository
 
 import com.example.unisphere.db.local.dao.EventDao
+import com.example.unisphere.db.local.dao.PoiDao
+import com.example.unisphere.db.local.dao.RecipeDao
 import com.example.unisphere.repository.UserRepository
 import com.example.unisphere.repository.EventRepository
+import com.example.unisphere.repository.PoiRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.json.Json
 
 @Module
 @InstallIn(SingletonComponent::class) // Significa: "Questi oggetti vivono per tutta la durata dell'app"
@@ -76,5 +84,40 @@ object DatabaseModule {
     @Singleton
     fun provideWalletRepository(walletDao: WalletDao): WalletRepository {
         return WalletRepository(walletDao)
+    }
+
+    //RECIPE
+    @Module
+    @InstallIn(SingletonComponent::class)
+    object NetworkModule {
+
+        @Provides
+        @Singleton
+        fun provideHttpClient(): HttpClient {
+            return HttpClient(OkHttp) {
+                install(ContentNegotiation) {
+                    json(Json {
+                        ignoreUnknownKeys = true
+                        coerceInputValues = true
+                    })
+                }
+            }
+        }
+
+        @Provides
+        fun provideRecipeDao(database: AppDatabase): RecipeDao {
+            return database.recipeDao()
+        }
+    }
+    //Point Of Interest
+    @Provides
+    fun providePoiDao(database: AppDatabase): PoiDao {
+        return database.poiDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMapRepository(poiDao: PoiDao): PoiRepository {
+        return PoiRepository(poiDao)
     }
 }
