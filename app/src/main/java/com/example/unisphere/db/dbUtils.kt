@@ -5,6 +5,9 @@ import com.example.unisphere.db.local.dao.UserDao
 import android.content.Context
 import androidx.room.Room
 import com.example.unisphere.db.local.dao.CalendarDao
+import com.example.unisphere.db.local.dao.WalletDao
+import com.example.unisphere.repository.WalletRepository
+
 import com.example.unisphere.db.local.dao.EventDao
 import com.example.unisphere.repository.UserRepository
 import com.example.unisphere.repository.EventRepository
@@ -57,10 +60,21 @@ object DatabaseModule {
         eventDao: EventDao,
         calendarDao: CalendarDao
     ): EventRepository {
-        // Ora possiamo passarlo in modo sicuro senza usare il TODO()
         return EventRepository(
             eventDao = eventDao,
             calendarDao = calendarDao
         )
+    }
+
+    //WALLET
+    @Provides
+    fun provideWalletDao(database: AppDatabase): WalletDao {
+        return database.walletDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideWalletRepository(walletDao: WalletDao): WalletRepository {
+        return WalletRepository(walletDao)
     }
 }

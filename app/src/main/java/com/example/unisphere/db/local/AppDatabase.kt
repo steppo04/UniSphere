@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.unisphere.db.local.dao.CalendarDao
+import com.example.unisphere.db.local.dao.WalletDao
+import com.example.unisphere.db.local.entity.TransactionCategoryEntity
+import com.example.unisphere.db.local.entity.TransactionEntity
 import com.example.unisphere.db.local.dao.UserDao
 import com.example.unisphere.db.local.dao.EventDao
 import com.example.unisphere.db.local.entity.UserEntity
@@ -17,9 +20,11 @@ import com.example.unisphere.ui.utils.CalendarConverters
     entities = [
         UserEntity::class,
         EventEntity::class,
-        CalendarTypeEntity::class // 1. Aggiunta l'entità per la gestione dei calendari
+        CalendarTypeEntity::class,
+        TransactionEntity::class,
+        TransactionCategoryEntity::class
     ],
-    version = 3, // 2. Aumentata a 3 per includere la nuova tabella CalendarTypeEntity
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(CalendarConverters::class)
@@ -27,6 +32,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun userDao(): UserDao
     abstract fun eventDao(): EventDao
+
+    abstract fun walletDao(): WalletDao
 
     // 3. Corretto il nome della funzione in minuscolo (camelCase)
     abstract fun calendarDao(): CalendarDao
