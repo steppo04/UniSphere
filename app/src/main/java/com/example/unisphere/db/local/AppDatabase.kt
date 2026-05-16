@@ -7,17 +7,19 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.unisphere.db.local.dao.CalendarDao
 import com.example.unisphere.db.local.dao.WalletDao
-import com.example.unisphere.db.local.entity.TransactionCategoryEntity
-import com.example.unisphere.db.local.entity.TransactionEntity
-import com.example.unisphere.db.local.entity.FavoriteRecipeEntity
-import com.example.unisphere.db.local.entity.PointOfInterestEntity
 import com.example.unisphere.db.local.dao.UserDao
 import com.example.unisphere.db.local.dao.EventDao
 import com.example.unisphere.db.local.dao.PoiDao
 import com.example.unisphere.db.local.dao.RecipeDao
+import com.example.unisphere.db.local.dao.HouseDao // <--- NUOVO IMPORT
+import com.example.unisphere.db.local.entity.TransactionCategoryEntity
+import com.example.unisphere.db.local.entity.TransactionEntity
+import com.example.unisphere.db.local.entity.FavoriteRecipeEntity
+import com.example.unisphere.db.local.entity.PointOfInterestEntity
 import com.example.unisphere.db.local.entity.UserEntity
 import com.example.unisphere.db.local.entity.EventEntity
-import com.example.unisphere.db.local.entity.CalendarTypeEntity // Assicurati che l'import sia corretto
+import com.example.unisphere.db.local.entity.CalendarTypeEntity
+import com.example.unisphere.db.local.entity.* // <--- NUOVO IMPORT PER LE ENTITÀ COABITAZIONE
 import com.example.unisphere.ui.utils.CalendarConverters
 
 @Database(
@@ -28,9 +30,17 @@ import com.example.unisphere.ui.utils.CalendarConverters
         TransactionEntity::class,
         TransactionCategoryEntity::class,
         FavoriteRecipeEntity::class,
-        PointOfInterestEntity::class
+        PointOfInterestEntity::class,
+        // --- NUOVE ENTITÀ DI COABITAZIONE AGGIUNTE ---
+        HouseEntity::class,
+        HouseMemberEntity::class,
+        HouseInvitationEntity::class,
+        CleaningServiceEntity::class,
+        CleaningAssignmentEntity::class,
+        GroupTransactionEntity::class,
+        TransactionSplitEntity::class
     ],
-    version = 6,
+    version = 7, // <--- PORTATO A 7 PER FARE IL REFRESH DELLE TABELLE
     exportSchema = false
 )
 @TypeConverters(CalendarConverters::class)
@@ -38,15 +48,13 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun userDao(): UserDao
     abstract fun eventDao(): EventDao
-
     abstract fun walletDao(): WalletDao
-
-    // 3. Corretto il nome della funzione in minuscolo (camelCase)
     abstract fun calendarDao(): CalendarDao
-
     abstract fun recipeDao(): RecipeDao
-
     abstract fun poiDao(): PoiDao
+
+    // --- NUOVO DAO ASSEGNATO ---
+    abstract fun houseDao(): HouseDao
 
     companion object {
         @Volatile
@@ -59,8 +67,6 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "unisphere_database"
                 )
-                    // 4. FallbackDestructiveMigration è utile in sviluppo:
-                    // se cambi versione, cancella e ricrea il DB invece di crashare
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

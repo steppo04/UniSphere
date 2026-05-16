@@ -9,6 +9,7 @@ import com.example.unisphere.db.local.dao.WalletDao
 import com.example.unisphere.repository.WalletRepository
 
 import com.example.unisphere.db.local.dao.EventDao
+import com.example.unisphere.db.local.dao.HouseDao
 import com.example.unisphere.db.local.dao.PoiDao
 import com.example.unisphere.db.local.dao.RecipeDao
 import com.example.unisphere.repository.UserRepository
@@ -119,5 +120,11 @@ object DatabaseModule {
     @Singleton
     fun provideMapRepository(poiDao: PoiDao): PoiRepository {
         return PoiRepository(poiDao)
+    }
+
+    //Unihome
+    @Provides
+    fun provideHouseDao(database: AppDatabase): HouseDao {
+        return database.houseDao()
     }
 }
