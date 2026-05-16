@@ -67,7 +67,8 @@ fun CalendarScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate(NavigationRoute.AddCalendarEvent) },
-                containerColor = MaterialTheme.colorScheme.primary
+                containerColor = MaterialTheme.colorScheme.primary,
+                shape = CircleShape
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Aggiungi", tint = Color.White)
             }

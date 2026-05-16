@@ -254,7 +254,7 @@ fun ProfileScreen(
         AlertDialog(
             onDismissRequest = { showAppInfoDialog = false },
             title = { Text("Info UniSphere", fontWeight = FontWeight.Bold) },
-            text = { Text("UniSphere Coabitazione Smart Hub.\nSviluppato con Jetpack Compose, Hilt, Room e Supabase.\n\n© 2026 - Tutti i diritti riservati.", fontSize = 14.sp) },
+            text = { Text("UniSphere.\nSviluppato con Jetpack Compose, Hilt, Room e Supabase.\n\n© 2026 - Tutti i diritti riservati.", fontSize = 14.sp) },
             confirmButton = { Button(onClick = { showAppInfoDialog = false }) { Text("Chiudi") } }
         )
     }

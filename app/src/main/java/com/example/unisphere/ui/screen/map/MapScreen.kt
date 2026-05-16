@@ -6,10 +6,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -48,12 +52,10 @@ fun MapScreen(
 
     Configuration.getInstance().userAgentValue = context.packageName
 
-    // --- SEZIONE PERMESSI RUNTME ANDROID ---
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.values.any { it }) {
-            // Se l'utente concede il permesso, avvia il recupero della posizione
             viewModel.onAction(MapAction.OnUseCurrentLocation)
         }
     }
@@ -62,22 +64,30 @@ fun MapScreen(
         topBar = { AppBar(title = "UniMaps", navController = navController) },
         bottomBar = { BottomNavigationBar(navController = navController) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.onAction(MapAction.OnAddPoiClicked) }) {
-                Icon(Icons.Default.AddLocation, contentDescription = "Aggiungi Punto")
+            FloatingActionButton(
+                onClick = { viewModel.onAction(MapAction.OnAddPoiClicked) },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
+            ) {
+                Icon(Icons.Default.AddLocationAlt, contentDescription = "Aggiungi Punto")
             }
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
         ) {
-            // Mappa OpenStreetMap (Metà superiore)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .weight(1.1f)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             ) {
                 AndroidView(
                     factory = { ctx ->
@@ -116,7 +126,7 @@ fun MapScreen(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 16.dp)
+                            .padding(bottom = 12.dp)
                             .fillMaxWidth()
                     ) {
                         PoiSmallCard(
@@ -132,28 +142,33 @@ fun MapScreen(
                 }
             }
 
-            // Lista dei punti salvati (Metà inferiore)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .padding(16.dp)
+                    .weight(0.9f)
+                    .padding(horizontal = 16.dp)
             ) {
                 Text(
                     text = "I tuoi luoghi salvati",
-                    style = MaterialTheme.typography.titleLarge,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 if (state.pois.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Nessun luogo salvato. Aggiungine uno!", color = Color.Gray)
+                    Box(modifier = Modifier.fillMaxSize().padding(bottom = 16.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Map, null, modifier = Modifier.size(44.dp), tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Nessun luogo salvato. Aggiungine uno!", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                        }
                     }
                 } else {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
                         items(state.pois, key = { it.id }) { poi ->
                             PoiListItem(
@@ -175,14 +190,12 @@ fun MapScreen(
             onDismiss = { viewModel.onAction(MapAction.OnDismissAddDialog) },
             onConfirm = { viewModel.onAction(MapAction.OnSavePoiClicked) },
             onLocationRequest = {
-                // Controllo preliminare se i permessi sono già stati accordati in passato
                 val fineLocationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 val coarseLocationGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
                 if (fineLocationGranted || coarseLocationGranted) {
                     viewModel.onAction(MapAction.OnUseCurrentLocation)
                 } else {
-                    // Altrimenti lancia il pop-up di richiesta permessi di sistema
                     permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                 }
             }
@@ -196,26 +209,35 @@ fun PoiListItem(poi: PointOfInterestEntity, onClick: () -> Unit, onDelete: () ->
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.LocationOn,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(poi.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                Text(poi.address, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1)
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
             }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Elimina", tint = Color.Red.copy(alpha = 0.6f))
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = poi.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(poi.address, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 1.dp))
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.DeleteOutline, contentDescription = "Elimina", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -223,35 +245,48 @@ fun PoiListItem(poi: PointOfInterestEntity, onClick: () -> Unit, onDelete: () ->
 
 @Composable
 fun PoiSmallCard(poi: PointOfInterestEntity, onClose: () -> Unit, onOpenInMaps: () -> Unit) {
-    ElevatedCard(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 12.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
-                Text(poi.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Chiudi")
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(poi.name, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(poi.address, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
+                }
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), CircleShape)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Chiudi", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurface)
                 }
             }
-            Text(poi.address, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            Spacer(modifier = Modifier.height(12.dp))
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Button(
                 onClick = onOpenInMaps,
-                modifier = Modifier.fillMaxWidth().height(40.dp),
-                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
                 Spacer(Modifier.width(8.dp))
-                Text("Indicazioni", fontSize = 14.sp)
+                Text("Indicazioni", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
     }
@@ -264,7 +299,7 @@ fun AddPoiDialog(
     onAction: (MapAction) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
-    onLocationRequest: () -> Unit // Callback delegata al check dei permessi
+    onLocationRequest: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -274,32 +309,50 @@ fun AddPoiDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nuovo Punto di Interesse", fontWeight = FontWeight.Bold) },
+        title = { Text("Nuovo Luogo", fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+
+                TextField(
                     value = state.newPoiName,
                     onValueChange = { onAction(MapAction.OnNameChanged(it)) },
-                    label = { Text("Nome") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    placeholder = { Text("Nome del luogo (es. Università)") },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
                 )
 
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
+                    TextField(
                         value = state.newPoiAddress,
                         onValueChange = {
                             onAction(MapAction.OnAddressChanged(it))
                             expanded = it.length >= 3
                         },
-                        label = { Text("Indirizzo / Via") },
-                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Indirizzo / Via") },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent
+                        ),
                         trailingIcon = {
                             if (state.isLocating) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                             } else {
-                                IconButton(onClick = onLocationRequest) { // <--- ORA CHIAMA IL VERIFICATORE DEI PERMESSI
-                                    Icon(Icons.Default.MyLocation, contentDescription = "Usa posizione attuale")
+                                IconButton(onClick = onLocationRequest) {
+                                    Icon(Icons.Default.MyLocation, contentDescription = "Usa posizione attuale", tint = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -308,12 +361,12 @@ fun AddPoiDialog(
                     DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(0.9f),
                         properties = PopupProperties(focusable = false)
                     ) {
                         state.addressSuggestions.forEach { suggestion ->
                             DropdownMenuItem(
-                                text = { Text(suggestion) },
+                                text = { Text(suggestion, fontSize = 14.sp) },
                                 onClick = {
                                     onAction(MapAction.OnSuggestionSelected(suggestion))
                                     expanded = false
@@ -323,24 +376,33 @@ fun AddPoiDialog(
                     }
                 }
 
-                OutlinedTextField(
+                TextField(
                     value = state.newPoiNotes,
                     onValueChange = { onAction(MapAction.OnNotesChanged(it)) },
-                    label = { Text("Note") },
-                    modifier = Modifier.fillMaxWidth()
+                    placeholder = { Text("Note aggiuntive (opzionale)") },
+                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = onConfirm,
-                enabled = state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank()
+                enabled = state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank(),
+                shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Salva")
+                Text("Salva", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annulla") }
+            TextButton(onClick = onDismiss) { Text("Annulla", color = MaterialTheme.colorScheme.outline) }
         }
     )
 }

@@ -62,7 +62,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             AppBar(
-                title = if (state.hasHouse) state.houseName else "UniSphere Hub",
+                title = if (state.hasHouse) state.houseName else "UniHome",
                 navController = navController
             )
         },
@@ -117,7 +117,7 @@ fun HomeScreen(
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Icon(Icons.Default.HomeWork, null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
-                    Text("Crea la tua Community", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                    Text("Crea o unisciti ad una UniHome", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                     Text("Unisci le forze con i tuoi coinquilini per organizzare la casa in modo intelligente.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
 
                     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
@@ -125,11 +125,11 @@ fun HomeScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.AddHome, null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Fonda una nuova casa", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("Crea una nuova casa", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             }
-                            OutlinedTextField(value = state.newHouseName, onValueChange = { viewModel.onAction(UniHomeAction.OnNewHouseNameChanged(it)) }, label = { Text("Nome della residenza") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            OutlinedTextField(value = state.newHouseName, onValueChange = { viewModel.onAction(UniHomeAction.OnNewHouseNameChanged(it)) }, label = { Text("Nome della casa") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                             Button(onClick = { viewModel.onAction(UniHomeAction.OnCreateHouseClicked) }, modifier = Modifier.fillMaxWidth().height(48.dp), enabled = state.newHouseName.isNotBlank()) {
-                                Text("Inizia Ora", fontWeight = FontWeight.Bold)
+                                Text("Crea", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
