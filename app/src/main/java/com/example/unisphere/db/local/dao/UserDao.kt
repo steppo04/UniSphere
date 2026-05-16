@@ -28,4 +28,19 @@ interface UserDao {
 
     @Query("UPDATE users SET currentTheme = :theme WHERE uid = :uid")
     suspend fun updateTheme(uid: String, theme: String)
+
+    // Conta quante volte è presente questa email (0 se libera, 1 se presa)
+    @Query("SELECT COUNT(*) FROM users WHERE email = :email LIMIT 1")
+    suspend fun countUsersByEmail(email: String): Int
+
+    // Conta quantote volte è presente questo username (0 se libero, 1 se preso)
+    @Query("SELECT COUNT(*) FROM users WHERE username = :username LIMIT 1")
+    suspend fun countUsersByUsername(username: String): Int
+
+    @Query("UPDATE users SET username = :newUsername WHERE uid = :uid")
+    suspend fun updateUsername(uid: String, newUsername: String)
+
+    // NUOVO: Aggiorna solo l'email nel DB locale
+    @Query("UPDATE users SET email = :newEmail WHERE uid = :uid")
+    suspend fun updateEmail(uid: String, newEmail: String)
 }

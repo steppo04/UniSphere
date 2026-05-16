@@ -17,6 +17,7 @@ class UserRepository @Inject constructor(
         name: String,
         surname: String,
         username: String,
+        profilePictureUri: String?,
         theme: String
     ) {
         val newUser = UserEntity(
@@ -25,6 +26,7 @@ class UserRepository @Inject constructor(
             name = name,
             surname = surname,
             username = username,
+            profilePictureUri = profilePictureUri,
             currentTheme = theme
         )
         userDao.insertUser(newUser)
@@ -44,5 +46,23 @@ class UserRepository @Inject constructor(
     }
     suspend fun updateLocalTheme(uid: String, theme: String) {
         userDao.updateTheme(uid, theme)
+    }
+    // --- NUOVO: Controllo unicità Email ---
+    suspend fun isEmailTaken(email: String): Boolean {
+        return userDao.countUsersByEmail(email) > 0
+    }
+
+    // --- NUOVO: Controllo unicità Username ---
+    suspend fun isUsernameTaken(username: String): Boolean {
+        return userDao.countUsersByUsername(username) > 0
+    }
+
+    suspend fun updateUsername(uid: String, newUsername: String) {
+        userDao.updateUsername(uid, newUsername)
+    }
+
+    // NUOVO: Passa l'aggiornamento dell'email al DAO
+    suspend fun updateEmail(uid: String, newEmail: String) {
+        userDao.updateEmail(uid, newEmail)
     }
 }

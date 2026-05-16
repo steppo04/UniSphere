@@ -1,6 +1,5 @@
 package com.example.unisphere.ui.screen.accessScreen
 
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,20 +16,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.unisphere.ui.composables.NavigationRoute
 import com.example.unisphere.ui.utils.rememberImagePicker
-import com.example.unisphere.R
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignInScreen(
     navController: NavHostController,
@@ -38,10 +36,10 @@ fun SignInScreen(
 ) {
     val state = viewModel.state
     val scrollState = rememberScrollState()
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
 
+    // Agganciamo il picker dell'immagine all'action del ViewModel
     val openImagePicker = rememberImagePicker { uri ->
-        selectedImageUri = uri
+        viewModel.onAction(SignInAction.OnImageSelected(uri))
     }
 
     Column(
@@ -55,20 +53,21 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- SELEZIONE IMMAGINE PROFILO CON ICONA FOTOCAMERA ---
+        // --- SELEZIONE IMMAGINE PROFILO REATTIVA ---
         Box(
             modifier = Modifier
                 .size(120.dp)
                 .clickable { openImagePicker() },
             contentAlignment = Alignment.BottomEnd
         ) {
-            if (selectedImageUri != null) {
+            if (!state.profilePictureUri.isNullOrEmpty()) {
                 AsyncImage(
-                    model = selectedImageUri,
+                    model = state.profilePictureUri,
                     contentDescription = "Profile Picture",
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(CircleShape)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
                 )
             } else {
                 Icon(
@@ -84,14 +83,14 @@ fun SignInScreen(
             Surface(
                 modifier = Modifier.size(36.dp),
                 shape = CircleShape,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 tonalElevation = 4.dp
             ) {
                 Icon(
                     imageVector = Icons.Default.CameraAlt,
                     contentDescription = "Change photo",
                     modifier = Modifier.padding(8.dp),
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
         }
@@ -173,7 +172,6 @@ fun SignInScreen(
             isError = state.isError
         )
 
-        // --- MESSAGGIO DI ERRORE DINAMICO ---
         if (state.isError) {
             Text(
                 text = state.errorMessage ?: "Controlla i dati inseriti.",
@@ -185,24 +183,22 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // --- BOTTONE DI REGISTRAZIONE CON CARICAMENTO ---
         Button(
             onClick = {
                 viewModel.onAction(SignInAction.OnCreateAccountClicked) {
-                    // Quando la registrazione ha successo naviga alla Home
                     navController.navigate(NavigationRoute.Homescreen) {
                         popUpTo(NavigationRoute.SignInScreen) { inclusive = true }
                     }
                 }
             },
-            enabled = !state.isLoading, // Disabilita se sta caricando
+            enabled = !state.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
             shape = MaterialTheme.shapes.large,
         ) {
             if (state.isLoading) {
-                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
             } else {
                 Text("Crea Account", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }

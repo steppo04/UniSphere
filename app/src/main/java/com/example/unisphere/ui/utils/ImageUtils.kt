@@ -1,13 +1,6 @@
 package com.example.unisphere.ui.utils
 
-import android.Manifest
-import android.content.ContentValues
-import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.provider.MediaStore
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,102 +10,108 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.*
 
 @Composable
 fun rememberImagePicker(
     onImageSelected: (Uri) -> Unit
 ): () -> Unit {
     val context = LocalContext.current
+    var showDialog by remember { mutableStateOf(false) }
 
-    var showDialog by rememberSaveable { mutableStateOf(false) }
-    var tempUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    // LA CHIAVE DEL SUCCESSO: rememberSaveable!
+    // Salviamo il percorso (String) invece del file, così sopravvive al riavvio della memoria
+    var cameraTempFilePath by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // --- 1. GALLERIA ---
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        uri?.let {
-            val permanentUri = saveImageToInternalStorage(context, it)
-            if (permanentUri != null) onImageSelected(Uri.parse(permanentUri))
+        uri?.let { galleryUri ->
+            try {
+                val destinationFile = File(context.filesDir, "profile_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(galleryUri)?.use { input ->
+                    FileOutputStream(destinationFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                onImageSelected(Uri.fromFile(destinationFile))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
-    // contratto standard per la fotocamera
+    // --- 2. FOTOCAMERA UFFICIALE TRAMITE FILE PROVIDER ---
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
-        android.util.Log.d("FOTOCAMERA", "Successo scatto: $success")
-        if (success && tempUriString != null) {
-            val uri = Uri.parse(tempUriString!!)
-            // Copiamo l'immagine temporanea rendendola definitiva con il timestamp corretto
-            val permanentUri = saveImageToInternalStorage(context, uri)
-            android.util.Log.d("FOTOCAMERA", "Nuovo percorso: $permanentUri")
-            if (permanentUri != null) onImageSelected(Uri.parse(permanentUri))
+        if (success) {
+            cameraTempFilePath?.let { path ->
+                try {
+                    val tempFile = File(path)
+                    if (tempFile.exists()) {
+                        // Creiamo il file definitivo
+                        val destinationFile = File(context.filesDir, "profile_${System.currentTimeMillis()}.jpg")
+
+                        // Spostiamo i dati dal file temporaneo a quello permanente
+                        tempFile.inputStream().use { input ->
+                            FileOutputStream(destinationFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Eliminiamo il file temporaneo di cache per fare pulizia
+                        tempFile.delete()
+
+                        // Aggiorniamo la UI con il percorso permanente e stabile
+                        onImageSelected(Uri.fromFile(destinationFile))
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
-
-    val openDialog = { showDialog = true }
 
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text("Seleziona Foto Profilo") },
-            text = { Text("Vuoi scattare una nuova foto o sceglierne una dalla galleria?") },
+            title = { Text("Seleziona Immagine") },
+            text = { Text("Vuoi scattare una nuova foto profilo o sceglierne una esistente dalla galleria?") },
             confirmButton = {
                 TextButton(onClick = {
                     showDialog = false
                     galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) {
-                    Text("Galleria")
-                }
+                }) { Text("Galleria") }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showDialog = false
                     try {
-                        // CREAZIONE FILE TEMPORANEO NELLA CACHE PRIVATA
-                        val cacheDir = context.externalCacheDir ?: context.cacheDir
-                        val file = File.createTempFile("tmp_profile_take_", ".jpg", cacheDir)
+                        val tempFile = File(context.cacheDir, "temp_camera_snap.jpg")
 
-                        // Generiamo l'URI sicuro tramite il FileProvider dichiarato nel Manifest
-                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                        // Salviamo la Stringa nel rememberSaveable PRIMA di aprire la fotocamera
+                        cameraTempFilePath = tempFile.absolutePath
+
+                        // Generiamo l'URI sicuro tramite il FileProvider
+                        val uri = FileProvider.getUriForFile(
                             context,
                             "${context.packageName}.provider",
-                            file
+                            tempFile
                         )
 
-                        tempUriString = uri.toString()
+                        // Lanciamo la fotocamera
                         cameraLauncher.launch(uri)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
-                }) {
-                    Text("Fotocamera")
-                }
+                }) { Text("Fotocamera") }
             }
         )
     }
 
-    return openDialog
-}
-
-
-private fun saveImageToInternalStorage(context: Context, uri: Uri): String? {
-    return try {
-        val inputStream = context.contentResolver.openInputStream(uri)
-        val file = File(context.filesDir, "user_profile_photo.jpg")
-
-        val outputStream = FileOutputStream(file)
-        inputStream?.use { input -> outputStream.use { output -> input.copyTo(output) } }
-
-        outputStream.flush()
-        file.absolutePath
-    } catch (e: Exception) {
-        null
-    }
+    return { showDialog = true }
 }

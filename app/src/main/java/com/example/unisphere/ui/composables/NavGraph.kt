@@ -9,6 +9,7 @@ import com.example.unisphere.ui.screen.uniHome.HomeScreen
 import com.example.unisphere.ui.screen.LandingPage
 import com.example.unisphere.ui.screen.profile.ProfileScreen
 import com.example.unisphere.ui.screen.accessScreen.LoginScreen
+import com.example.unisphere.ui.screen.accessScreen.ResetPasswordScreen
 import com.example.unisphere.ui.screen.accessScreen.SignInScreen
 import com.example.unisphere.ui.screen.calendar.AddCalendarEvent
 import com.example.unisphere.ui.screen.calendar.CalendarScreen
@@ -69,6 +70,9 @@ fun NavGraph(navController: NavHostController) {
 
         composable<NavigationRoute.FavoriteRecipesScreen> {
             FavoriteRecipesScreen(navController)
+        }
+        composable("reset_password_screen") {
+            ResetPasswordScreen(navController = navController)
         }
     }
 
