@@ -4,8 +4,6 @@ import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.unisphere.db.SupabaseClient
@@ -14,19 +12,29 @@ import com.example.unisphere.db.local.entity.TransactionEntity
 import com.example.unisphere.repository.WalletRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
-import kotlin.random.Random
 
 data class WalletState(
     val transactions: List<TransactionEntity> = emptyList(),
+    val filteredTransactions: List<TransactionEntity> = emptyList(),
     val categories: List<TransactionCategoryEntity> = emptyList(),
     val selectedTransaction: TransactionEntity? = null,
     val showAddDialog: Boolean = false,
 
-    // Form fields per nuova transazione
+    // Filtri Combinabili iOS
+    val filterCategoryId: Int? = null,
+    val filterIsIncome: Boolean? = null, // null = Tutti, true = Entrate, false = Uscite
+    val filterMinAmount: String = "",
+    val filterMaxAmount: String = "",
+    val isFilterPanelExpanded: Boolean = false,
+    val showAllTransactions: Boolean = false,
+
+    // Form fields nuova transazione
     val newTransactionTitle: String = "",
     val newTransactionAmount: String = "",
     val newTransactionCategoryId: Int = 0,
@@ -50,6 +58,15 @@ sealed interface WalletAction {
     data class OnCreateCategoryType(val name: String, val colorHex: String) : WalletAction
     data class OnDeleteCategoryType(val category: TransactionCategoryEntity) : WalletAction
     data object ToggleDatePicker : WalletAction
+
+    // Azioni dei Filtri
+    data class OnFilterCategoryChanged(val categoryId: Int?) : WalletAction
+    data class OnFilterTypeChanged(val isIncome: Boolean?) : WalletAction
+    data class OnFilterMinAmountChanged(val value: String) : WalletAction
+    data class OnFilterMaxAmountChanged(val value: String) : WalletAction
+    data object ToggleFilterPanel : WalletAction
+    data object ToggleShowAllTransactions : WalletAction
+    data object OnClearFilters : WalletAction
 }
 
 @HiltViewModel
@@ -61,25 +78,59 @@ class WalletViewModel @Inject constructor(
     var state by mutableStateOf(WalletState())
         private set
 
+    private var rawTransactions: List<TransactionEntity> = emptyList()
+    private var pendingCategorySelectionName: String? = null
+    private var currentUid: String = "default_user"
+
+    private var categoriesJob: Job? = null
+    private var transactionsJob: Job? = null
+
     init {
-        loadWalletData()
+        observeSession()
     }
 
-    private fun loadWalletData() {
-        val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
-
+    // RISOLUZIONE COLD START: Ascolta reattivamente la sessione di Supabase senza perdere l'ID
+    private fun observeSession() {
         viewModelScope.launch {
+            SupabaseClient.client.auth.sessionStatus.collectLatest { status ->
+                val uid = if (status is SessionStatus.Authenticated) {
+                    status.session.user?.id ?: "default_user"
+                } else {
+                    SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
+                }
+                currentUid = uid
+                loadWalletData(uid)
+            }
+        }
+    }
+
+    private fun loadWalletData(uid: String) {
+        categoriesJob?.cancel()
+        categoriesJob = viewModelScope.launch {
             walletRepository.getCategories(uid).collectLatest { cats ->
                 state = state.copy(
                     categories = cats,
                     newTransactionCategoryId = if (state.newTransactionCategoryId == 0) cats.firstOrNull()?.id ?: 0 else state.newTransactionCategoryId
                 )
+
+                // AUTOSELEZIONE AUTOMATICA: Se abbiamo appena creato una categoria, la imposta come attiva
+                pendingCategorySelectionName?.let { name ->
+                    cats.find { it.name == name }?.let { matchedCat ->
+                        state = state.copy(newTransactionCategoryId = matchedCat.id)
+                    }
+                    pendingCategorySelectionName = null
+                }
+                applyFilters()
             }
         }
 
-        viewModelScope.launch {
+        transactionsJob?.cancel()
+        transactionsJob = viewModelScope.launch {
             walletRepository.getTransactions(uid).collectLatest { trans ->
+                rawTransactions = trans
+                // CORREZIONE CRITICA: Ora aggiorna la sorgente primaria per alimentare i grafici della UI
                 state = state.copy(transactions = trans)
+                applyFilters()
             }
         }
     }
@@ -119,10 +170,10 @@ class WalletViewModel @Inject constructor(
                 }
             }
             is WalletAction.OnCreateCategoryType -> {
-                val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
+                pendingCategorySelectionName = action.name
                 viewModelScope.launch {
                     walletRepository.saveCategory(
-                        TransactionCategoryEntity(name = action.name, colorHex = action.colorHex, userId = uid)
+                        TransactionCategoryEntity(name = action.name, colorHex = action.colorHex, userId = currentUid)
                     )
                 }
             }
@@ -132,17 +183,53 @@ class WalletViewModel @Inject constructor(
                 }
             }
             WalletAction.ToggleDatePicker -> state = state.copy(showDatePicker = !state.showDatePicker)
+            is WalletAction.OnFilterCategoryChanged -> {
+                state = state.copy(filterCategoryId = action.categoryId)
+                applyFilters()
+            }
+            is WalletAction.OnFilterTypeChanged -> {
+                state = state.copy(filterIsIncome = action.isIncome)
+                applyFilters()
+            }
+            is WalletAction.OnFilterMinAmountChanged -> {
+                state = state.copy(filterMinAmount = action.value)
+                applyFilters()
+            }
+            is WalletAction.OnFilterMaxAmountChanged -> {
+                state = state.copy(filterMaxAmount = action.value)
+                applyFilters()
+            }
+            WalletAction.ToggleFilterPanel -> state = state.copy(isFilterPanelExpanded = !state.isFilterPanelExpanded)
+            WalletAction.ToggleShowAllTransactions -> state = state.copy(showAllTransactions = !state.showAllTransactions)
+            WalletAction.OnClearFilters -> {
+                state = state.copy(filterCategoryId = null, filterIsIncome = null, filterMinAmount = "", filterMaxAmount = "")
+                applyFilters()
+            }
         }
+    }
+
+    private fun applyFilters() {
+        state = state.copy(
+            filteredTransactions = rawTransactions.filter { trans ->
+                val matchesCategory = state.filterCategoryId == null || trans.categoryId == state.filterCategoryId
+                val matchesType = state.filterIsIncome == null || trans.isIncome == state.filterIsIncome
+                val minAmt = state.filterMinAmount.toDoubleOrNull()
+                val matchesMin = minAmt == null || trans.amount >= minAmt
+                val maxAmt = state.filterMaxAmount.toDoubleOrNull()
+                val matchesMax = maxAmt == null || trans.amount <= maxAmt
+
+                matchesCategory && matchesType && matchesMin && matchesMax
+            }
+        )
     }
 
     private fun saveTransaction() {
         val amountDouble = state.newTransactionAmount.toDoubleOrNull() ?: 0.0
-        val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: return
         if (state.newTransactionTitle.isNotBlank() && amountDouble > 0 && state.newTransactionCategoryId != 0) {
             viewModelScope.launch {
                 walletRepository.saveTransaction(
                     TransactionEntity(
-                        userUid = uid,
+                        userUid = currentUid,
                         title = state.newTransactionTitle,
                         amount = amountDouble,
                         categoryId = state.newTransactionCategoryId,

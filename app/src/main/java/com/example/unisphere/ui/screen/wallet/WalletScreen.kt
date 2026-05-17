@@ -11,13 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,12 +79,12 @@ fun WalletScreen(
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
             item {
-                AppleWalletHeroCard(saldoNetto = saldoNetto, entrate = totaleEntrate, uscite = totaleUscite)
+                WalletOverviewHero(saldoNetto = saldoNetto, entrate = totaleEntrate, uscite = totaleUscite)
             }
 
             if (state.transactions.isEmpty()) {
                 item {
-                    AppleWalletEmptyState { viewModel.onAction(WalletAction.OnAddClicked) }
+                    EmptyDashboardState { viewModel.onAction(WalletAction.OnAddClicked) }
                 }
             } else {
                 item {
@@ -103,18 +97,75 @@ fun WalletScreen(
                     LineChartSection(state.transactions)
                 }
 
+                // --- INTESTAZIONE SEZIONE TRANSAZIONI SENZA IL PULSANTE DI TRONCAMENTO ---
                 item {
-                    Text("Transazioni Recenti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Transazioni", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        IconButton(
+                            onClick = { viewModel.onAction(WalletAction.ToggleFilterPanel) },
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = if (state.isFilterPanelExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            )
+                        ) {
+                            Icon(Icons.Default.FilterList, contentDescription = "Filtra", tint = if (state.isFilterPanelExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
                 }
 
-                items(state.transactions.sortedByDescending { it.date }, key = { it.id }) { transaction ->
-                    val matchedCat = state.categories.find { it.id == transaction.categoryId }
-                    TransactionItem(
-                        transaction = transaction,
-                        categoryName = matchedCat?.name ?: "Altro",
-                        colorHex = matchedCat?.colorHex ?: "#8E8E93",
-                        onClick = { viewModel.onAction(WalletAction.OnTransactionSelected(transaction)) }
-                    )
+                if (state.isFilterPanelExpanded) {
+                    item {
+                        SmartFilterPanel(state = state, onAction = viewModel::onAction)
+                    }
+                }
+
+                // Logica di controllo filtri attivi
+                val isFilteringActive = state.filterCategoryId != null || state.filterIsIncome != null || state.filterMinAmount.isNotBlank() || state.filterMaxAmount.isNotBlank()
+
+                val transactionsToDisplay = if (state.showAllTransactions || isFilteringActive) {
+                    state.filteredTransactions.sortedByDescending { it.date }
+                } else {
+                    state.filteredTransactions.sortedByDescending { it.date }.take(5)
+                }
+
+                if (transactionsToDisplay.isEmpty()) {
+                    item {
+                        Text("Nessun movimento trovato.", fontSize = 13.sp, color = Color.Gray, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp))
+                    }
+                } else {
+                    items(transactionsToDisplay, key = { it.id }) { transaction ->
+                        val matchedCat = state.categories.find { it.id == transaction.categoryId }
+                        TransactionItem(
+                            transaction = transaction,
+                            categoryName = matchedCat?.name ?: "Altro",
+                            colorHex = matchedCat?.colorHex ?: "#8E8E93",
+                            onClick = { viewModel.onAction(WalletAction.OnTransactionSelected(transaction)) }
+                        )
+                    }
+
+                    // --- NUOVO POSIZIONAMENTO CONTINUATIVO: TASTO IN FONDO ALLA LISTA ---
+                    if (!isFilteringActive && state.filteredTransactions.size > 5) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                TextButton(
+                                    onClick = { viewModel.onAction(WalletAction.ToggleShowAllTransactions) }
+                                ) {
+                                    Text(
+                                        text = if (state.showAllTransactions) "Mostra Meno" else "Vedi tutte le transazioni (${state.filteredTransactions.size})",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -132,7 +183,7 @@ fun WalletScreen(
 }
 
 @Composable
-fun AppleWalletHeroCard(saldoNetto: Double, entrate: Double, uscite: Double) {
+fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -191,13 +242,112 @@ fun AppleWalletHeroCard(saldoNetto: Double, entrate: Double, uscite: Double) {
     }
 }
 
+// --- SMART FILTER PANEL COMPRENSIVO DI FIX GEOMETRICI TOTALI NATIVI IOS ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(2.dp)
+            ) {
+                val selectedType = state.filterIsIncome
+                Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (selectedType == null) MaterialTheme.colorScheme.surface else Color.Transparent).clickable { onAction(WalletAction.OnFilterTypeChanged(null)) }, contentAlignment = Alignment.Center) {
+                    Text("Tutte", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (selectedType == null) MaterialTheme.colorScheme.primary else Color.Gray)
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (selectedType == true) Color(0xFFE8F5E9) else Color.Transparent).clickable { onAction(WalletAction.OnFilterTypeChanged(true)) }, contentAlignment = Alignment.Center) {
+                    Text("Entrate", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (selectedType == true) Color(0xFF2E7D32) else Color.Gray)
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (selectedType == false) Color(0xFFFFEAEA) else Color.Transparent).clickable { onAction(WalletAction.OnFilterTypeChanged(false)) }, contentAlignment = Alignment.Center) {
+                    Text("Uscite", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (selectedType == false) Color(0xFFC62828) else Color.Gray)
+                }
+            }
+
+            var menuExpanded by remember { mutableStateOf(false) }
+            val currentFilterCat = state.categories.find { it.id == state.filterCategoryId }
+            ExposedDropdownMenuBox(expanded = menuExpanded, onExpandedChange = { menuExpanded = it }) {
+                TextField(
+                    value = currentFilterCat?.name ?: "Tutte le categorie",
+                    onValueChange = {}, readOnly = true,
+                    placeholder = { Text("Filtra per Categoria") },
+                    modifier = Modifier.menuAnchor().fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    ),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded) }
+                )
+                ExposedDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(text = { Text("Tutte le categorie", fontWeight = FontWeight.Bold) }, onClick = { onAction(WalletAction.OnFilterCategoryChanged(null)); menuExpanded = false })
+                    state.categories.forEach { cat ->
+                        DropdownMenuItem(text = { Text(cat.name) }, onClick = { onAction(WalletAction.OnFilterCategoryChanged(cat.id)); menuExpanded = false })
+                    }
+                }
+            }
+
+            // CORREZIONE CRITICA: TextField piatti borderless a geometricità fissa 52.dp (Impedisce deformazioni)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TextField(
+                    value = state.filterMinAmount,
+                    onValueChange = { onAction(WalletAction.OnFilterMinAmountChanged(it)) },
+                    placeholder = { Text("Importo Min (€)", color = Color.Gray) },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
+                )
+                TextField(
+                    value = state.filterMaxAmount,
+                    onValueChange = { onAction(WalletAction.OnFilterMaxAmountChanged(it)) },
+                    placeholder = { Text("Importo Max (€)", color = Color.Gray) },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
+                )
+            }
+
+            TextButton(onClick = { onAction(WalletAction.OnClearFilters) }, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Icon(Icons.Default.ClearAll, null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Azzera Filtri", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
 @Composable
 fun LineChartSection(transactions: List<TransactionEntity>) {
     val sortedTransactions = transactions.sortedBy { it.date }
     val balanceTimeline = mutableListOf<Triple<LocalDate, Double, Boolean>>()
     var currentBalance = 0.0
 
-    // SANA CORREZIONE: Usiamo una variabile tempDate mutabile (var) per evitare il loop infinito
     var tempDate = LocalDate.now().minusDays(30)
     val endDate = LocalDate.now()
 
@@ -208,7 +358,7 @@ fun LineChartSection(transactions: List<TransactionEntity>) {
             currentBalance += daysTransactions.sumOf { if (it.isIncome) it.amount else -it.amount }
         }
         balanceTimeline.add(Triple(tempDate, currentBalance, hasChange))
-        tempDate = tempDate.plusDays(1) // Ora tempDate incrementa correttamente e il ciclo finisce!
+        tempDate = tempDate.plusDays(1)
     }
 
     val maxBalance = balanceTimeline.maxOfOrNull { it.second } ?: 100.0
@@ -369,36 +519,13 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
         title = { Text("Nuova Transazione", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.LightGray.copy(alpha = 0.2f))
-                        .padding(3.dp)
+                    modifier = Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.LightGray.copy(alpha = 0.2f)).padding(3.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(if (!state.newTransactionIsIncome) Color(0xFFFFEAEA) else Color.Transparent)
-                            .clickable { viewModel.onAction(WalletAction.OnTypeChanged(false)) },
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (!state.newTransactionIsIncome) Color(0xFFFFEAEA) else Color.Transparent).clickable { viewModel.onAction(WalletAction.OnTypeChanged(false)) }, contentAlignment = Alignment.Center) {
                         Text("Uscita", color = if (!state.newTransactionIsIncome) Color(0xFFC62828) else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(if (state.newTransactionIsIncome) Color(0xFFE8F5E9) else Color.Transparent)
-                            .clickable { viewModel.onAction(WalletAction.OnTypeChanged(true)) },
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (state.newTransactionIsIncome) Color(0xFFE8F5E9) else Color.Transparent).clickable { viewModel.onAction(WalletAction.OnTypeChanged(true)) }, contentAlignment = Alignment.Center) {
                         Text("Entrata", color = if (state.newTransactionIsIncome) Color(0xFF2E7D32) else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
@@ -417,10 +544,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCats) }
                     )
                     ExposedDropdownMenu(expanded = expandedCats, onDismissRequest = { expandedCats = false }) {
-                        DropdownMenuItem(
-                            text = { Text("+ Nuova Categoria", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
-                            onClick = { expandedCats = false; showCatDialog = true }
-                        )
+                        DropdownMenuItem(text = { Text("+ Nuova Categoria", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }, onClick = { expandedCats = false; showCatDialog = true })
                         HorizontalDivider()
                         state.categories.forEach { cat ->
                             DropdownMenuItem(
@@ -451,9 +575,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                 }
             }
         },
-        confirmButton = {
-            Button(onClick = { viewModel.onAction(WalletAction.OnSaveTransactionClicked) }) { Text("Aggiungi") }
-        }
+        confirmButton = { Button(onClick = { viewModel.onAction(WalletAction.OnSaveTransactionClicked) }) { Text("Aggiungi") } }
     )
 
     if (showCatDialog) {
@@ -475,10 +597,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    viewModel.onAction(WalletAction.OnCreateCategoryType(newCatName, selectedColorHex))
-                    showCatDialog = false
-                }) { Text("Crea") }
+                Button(onClick = { viewModel.onAction(WalletAction.OnCreateCategoryType(newCatName, selectedColorHex)); showCatDialog = false }) { Text("Crea") }
             }
         )
     }
@@ -494,7 +613,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
 }
 
 @Composable
-fun AppleWalletEmptyState(onAddClick: () -> Unit) {
+fun EmptyDashboardState(onAddClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         shape = RoundedCornerShape(24.dp),
@@ -552,7 +671,6 @@ fun PieChartSection(transactions: List<TransactionEntity>, categories: List<Tran
                     }
                 }
             }
-            // SANA MODIFICA: rimosso l'ulteriore scroll interno per evitare loop di misurazione con la LazyColumn esterna
             Column(modifier = Modifier.padding(start = 24.dp).weight(1f)) {
                 groupedByCat.forEach { (catId, _) ->
                     val category = categories.find { it.id == catId }
