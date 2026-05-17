@@ -13,8 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +28,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.EventEntity
 import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereAlertDialog
+import com.example.unisphere.ui.composables.UniSphereListItem
+import com.example.unisphere.ui.composables.UniSphereSectionHeader
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -47,15 +48,13 @@ fun EventDetailScreen(
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Stato per mostrare/nascondere l'alert di cancellazione
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // Convertiamo il colore Hex dello stato in un Color di Compose sicuro
     val calendarColor = remember(state.calendarColorHex) {
         try {
             Color(android.graphics.Color.parseColor(state.calendarColorHex))
         } catch (_: Exception) {
-            Color.Gray // Fallback se il colore è vuoto o errato
+            Color.Gray
         }
     }
 
@@ -88,27 +87,19 @@ fun EventDetailScreen(
             )
         }
     ) { padding ->
+
+        // --- REFACTOR COMPLETATO: Sostituito l'AlertDialog nativo con UniSphereAlertDialog globale ---
         if (showDeleteDialog) {
-            AlertDialog(
-                onDismissRequest = { showDeleteDialog = false },
-                title = { Text("Elimina Evento") },
-                text = { Text("Sei sicuro di voler eliminare questo evento? L'azione è irreversibile.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showDeleteDialog = false
-                            viewModel.deleteEvent { navController.popBackStack() }
-                        },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Elimina")
-                    }
+            UniSphereAlertDialog(
+                title = "Elimina Evento",
+                text = "Sei sicuro di voler eliminare questo evento? L'azione è irreversibile.",
+                confirmText = "Elimina",
+                onConfirm = {
+                    showDeleteDialog = false
+                    viewModel.deleteEvent { navController.popBackStack() }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteDialog = false }) {
-                        Text("Annulla")
-                    }
-                }
+                onDismiss = { showDeleteDialog = false },
+                dismissText = "Annulla"
             )
         }
 
@@ -131,11 +122,11 @@ fun EventDetailScreen(
                 Column(contentModifier.padding(16.dp)) {
                     EventMainInfo(event = event, calendarName = state.calendarName, calendarColor = calendarColor)
 
-                    SectionLabel("POSIZIONE")
+                    UniSphereSectionHeader(title = "Posizione")
                     MapCard(state.geoPoint)
 
                     if (event.description.isNotBlank()) {
-                        SectionLabel("NOTE")
+                        UniSphereSectionHeader(title = "Note aggiuntive")
                         InfoCard {
                             Text(
                                 event.description,
@@ -152,55 +143,31 @@ fun EventDetailScreen(
 }
 
 @Composable
-fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
-        modifier = Modifier.padding(start = 8.dp, top = 24.dp, bottom = 8.dp)
-    )
-}
-
-@Composable
 fun EventMainInfo(event: EventEntity, calendarName: String, calendarColor: Color) {
     InfoCard {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Schedule, null, tint = calendarColor, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        event.date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.ITALY)),
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        "${event.startTime} - ${event.endTime}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            UniSphereListItem(
+                headlineText = event.date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.ITALY)).replaceFirstChar { it.uppercase() },
+                supportingText = "${event.startTime} - ${event.endTime}",
+                leadingBarColor = calendarColor
+            )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).clip(CircleShape).background(calendarColor))
-                Spacer(Modifier.width(12.dp))
-                Text("Calendario: ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
-                Text(
-                    text = calendarName,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+            UniSphereListItem(
+                headlineText = calendarName,
+                supportingText = "Calendario di riferimento",
+                leadingBarColor = calendarColor.copy(alpha = 0.4f)
+            )
 
             if (event.location.isNotBlank()) {
-                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Place, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(event.location, color = MaterialTheme.colorScheme.onSurface)
-                }
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                UniSphereListItem(
+                    headlineText = event.location,
+                    supportingText = "Indirizzo dell'appuntamento",
+                    leadingBarColor = MaterialTheme.colorScheme.secondary
+                )
             }
         }
     }

@@ -35,6 +35,8 @@ import com.example.unisphere.repository.RecipeRepository
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereEmptyState
+import com.example.unisphere.ui.composables.UniSphereTextField
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -121,7 +123,6 @@ class CookViewModel @Inject constructor(
 }
 
 // --- INTERFACCIA GRAFICA ---
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CookScreen(
     navController: NavHostController,
@@ -141,34 +142,27 @@ fun CookScreen(
                 .padding(horizontal = 16.dp)
         ) {
 
-            // --- BARRA DI RICERCA IOS STYLE CORRETTA ---
-            TextField(
+            // Barra di ricerca centralizzata UniSphereTextField
+            UniSphereTextField(
                 value = state.searchQuery,
                 onValueChange = { viewModel.onAction(CookAction.OnSearchQueryChanged(it)) },
+                label = "Cerca ingredienti o ricette...",
+                leadingIcon = Icons.Default.Search,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 12.dp)
-                    .height(52.dp),
-                placeholder = { Text("Cerca ingredienti o ricette...", color = Color.Gray, fontSize = 15.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    // CORREZIONE: Parametri espliciti per evitare l'errore di compilazione
-                    focusedContainerColor = Color.LightGray.copy(alpha = 0.25f),
-                    unfocusedContainerColor = Color.LightGray.copy(alpha = 0.25f),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent
-                ),
+                    .padding(top = 16.dp, bottom = 12.dp),
                 trailingIcon = {
                     if (state.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             )
 
-            // --- BOTTONE RICETTE PREFERITE WIDGET ---
+            // Bottone Ricette Preferite Widget
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -190,22 +184,21 @@ fun CookScreen(
                 }
                 Spacer(modifier = Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Ricette Preferite", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("Ricette Preferite", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Text("Sfoglia i tuoi piatti salvati offline", fontSize = 12.sp, color = Color.Gray)
                 }
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
             }
 
-            // --- CONTROLLO STATO LISTA ---
+            // --- CONTROLLO STATO LISTA RICETTE ---
             if (state.recipes.isEmpty() && !state.isLoading) {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = 64.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 32.dp)) {
-                        Icon(Icons.Default.Restaurant, contentDescription = null, modifier = Modifier.size(56.dp), tint = Color.LightGray.copy(alpha = 0.6f))
-                        Spacer(Modifier.height(14.dp))
-                        Text("Esplora Nuovi Sapori", fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                        Text("Scrivi un ingrediente o un piatto sopra per visualizzare subito la preparazione passo-passo.", fontSize = 13.sp, color = Color.Gray, textAlign = TextAlign.Center, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
-                    }
-                }
+                // REFACTOR COMPLETATO: Sostituito il Box/Column manuale con UniSphereEmptyState globale
+                UniSphereEmptyState(
+                    icon = Icons.Default.Restaurant,
+                    title = "Esplora Nuovi Sapori",
+                    description = "Scrivi un ingrediente o un piatto sopra per visualizzare subito la preparazione passo-passo.",
+                    modifier = Modifier.weight(1f) // Occupa lo spazio rimanente centrando il contenuto
+                )
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

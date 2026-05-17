@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,9 @@ import com.example.unisphere.db.local.entity.EventEntity
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereEmptyState
+import com.example.unisphere.ui.composables.UniSphereListItem
+import com.example.unisphere.ui.composables.UniSphereSectionHeader
 import com.kizitonwose.calendar.compose.HorizontalCalendar
 import com.kizitonwose.calendar.compose.rememberCalendarState
 import com.kizitonwose.calendar.compose.CalendarState as LibCalendarState
@@ -121,26 +125,23 @@ fun CalendarScreen(
 @Composable
 fun EventListSection(uiState: CalendarState, navController: NavHostController) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
-            text = "Eventi del ${uiState.selectedDate.dayOfMonth} ${uiState.selectedDate.month.getDisplayName(TextStyle.FULL, Locale.ITALY)}",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 8.dp, bottom = 12.dp)
+
+        // REFACTOR: Intestazione unificata tramite UniSphereSectionHeader
+        UniSphereSectionHeader(
+            title = "Eventi del ${uiState.selectedDate.dayOfMonth} ${uiState.selectedDate.month.getDisplayName(TextStyle.FULL, Locale.ITALY)}"
         )
 
         if (uiState.events.isEmpty()) {
-            Text(
-                text = "Nessun impegno",
-                color = Color.Gray,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 8.dp, top = 8.dp)
+            // REFACTOR: Gestione dell'Empty State centralizzata e grafica avanzata
+            UniSphereEmptyState(
+                icon = Icons.Default.EventNote,
+                title = "Nessun impegno",
+                description = "Goditi il tempo libero! Non ci sono eventi o turni registrati per questa giornata."
             )
         } else {
             uiState.events.forEachIndexed { index, evento ->
-                // Cerchiamo il tipo di calendario associato all'evento per prenderne il codice colore Hex reale
                 val matchedCalendar = uiState.calendars.find { it.id == evento.calendar }
-                val calendarColorHex = matchedCalendar?.color ?: "#8E8E93" // Fallback grigio se non trovato
+                val calendarColorHex = matchedCalendar?.color ?: "#8E8E93"
 
                 EventCard(event = evento, calendarColorHex = calendarColorHex, navController = navController)
 
@@ -160,7 +161,6 @@ fun EventListSection(uiState: CalendarState, navController: NavHostController) {
 fun EventCard(event: EventEntity, calendarColorHex: String, navController: NavHostController) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
-    // Parsificazione sicura del colore esadecimale dinamico
     val barColor = remember(calendarColorHex) {
         try {
             Color(android.graphics.Color.parseColor(calendarColorHex))
@@ -169,59 +169,27 @@ fun EventCard(event: EventEntity, calendarColorHex: String, navController: NavHo
         }
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { navController.navigate(NavigationRoute.EventDetailScreen(eventId = event.id)) }
-            .padding(vertical = 10.dp, horizontal = 8.dp)
-            .height(IntrinsicSize.Min),
-        verticalAlignment = Alignment.Top
-    ) {
-        // --- BARRA VERTICALE COLORATA DINAMICA ---
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(2.dp))
-                .background(barColor)
-        )
-
-        Spacer(modifier = Modifier.width(16.dp))
-
-        // --- CONTENUTO (Titolo e Luogo) ---
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = event.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (event.location.isNotBlank()) {
+    UniSphereListItem(
+        headlineText = event.title,
+        supportingText = event.location.ifBlank { null },
+        leadingBarColor = barColor,
+        onClick = { navController.navigate(NavigationRoute.EventDetailScreen(eventId = event.id)) },
+        trailingContent = {
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = event.location,
+                    text = event.startTime.format(timeFormatter),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = event.endTime.format(timeFormatter),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
         }
-
-        // --- ORARIO (Inizio - Fine) ---
-        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
-            Text(
-                text = event.startTime.format(timeFormatter),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = event.endTime.format(timeFormatter),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-        }
-    }
+    )
 }
 
 @Composable

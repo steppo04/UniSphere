@@ -2,6 +2,7 @@ package com.example.unisphere.ui.screen.calendar
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Color as AndroidColor // SOLUZIONE: Alias pulito per evitare conflitti con il Color di Compose
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,6 +36,10 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.CalendarTypeEntity
+import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereAlertDialog
+import com.example.unisphere.ui.composables.UniSphereButton
+import com.example.unisphere.ui.composables.UniSphereTextField
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
@@ -51,23 +55,18 @@ fun AddCalendarEvent(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
 
-    // Stati locali per la gestione dei dialog di aggiunta ed eliminazione dei tipi di calendario
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var calendarToDelete by remember { mutableStateOf<CalendarTypeEntity?>(null) }
-
-    // Cerchiamo l'oggetto calendario selezionato per mostrare nome e colore nella UI
+    val showCreateDialog = remember { mutableStateOf(false) }
+    val calendarToDelete = remember { mutableStateOf<CalendarTypeEntity?>(null) }
     val selectedCalendar = state.calendarTypes.find { it.id == state.selectedCalendarId }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions.values.any { it }) {
-            viewModel.onAction(AddCalendarEventAction.OnGetCurrentLocation)
-        }
+        if (permissions.values.any { it }) viewModel.onAction(AddCalendarEventAction.OnGetCurrentLocation)
     }
 
     Scaffold(
-        modifier = Modifier.imePadding(), // Gestisce lo spazio della tastiera
+        modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 title = { Text("Aggiungi Evento", fontWeight = FontWeight.Bold) },
@@ -84,327 +83,219 @@ fun AddCalendarEvent(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp)
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = { focusManager.clearFocus() })
-                }
+                .pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) }
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- TITOLO ---
-            OutlinedTextField(
+            // Titolo Evento
+            UniSphereTextField(
                 value = state.title,
                 onValueChange = { viewModel.onAction(AddCalendarEventAction.OnTitleChanged(it)) },
-                label = { Text("Titolo") },
+                label = "Titolo",
+                leadingIcon = Icons.Default.Title,
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Next
-                )
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next)
             )
 
-            // --- SELEZIONE CALENDARIO DINAMICO ---
+            // Selezione Calendario
             ExposedDropdownMenuBox(
                 expanded = state.isTypeExpanded,
                 onExpandedChange = { viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(it)) }
             ) {
-                OutlinedTextField(
+                UniSphereTextField(
                     value = selectedCalendar?.name ?: "Seleziona Calendario",
                     onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Calendario") },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    leadingIcon = {
-                        selectedCalendar?.let {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(android.graphics.Color.parseColor(it.color)))
-                            )
-                        } ?: Icon(Icons.Default.Category, contentDescription = null)
-                    },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isTypeExpanded) },
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                    label = "Calendario",
+                    leadingIcon = Icons.Default.Category,
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isTypeExpanded) }
                 )
                 ExposedDropdownMenu(
                     expanded = state.isTypeExpanded,
                     onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(false)) }
                 ) {
-                    // Opzione fissa in cima per creare un nuovo calendario al volo
                     DropdownMenuItem(
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
                                 Spacer(Modifier.width(8.dp))
                                 Text("Nuovo Calendario", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                             }
                         },
                         onClick = {
                             viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(false))
-                            showCreateDialog = true
+                            showCreateDialog.value = true
                         }
                     )
                     HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 
                     if (state.calendarTypes.isEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text("Nessun calendario, creane uno!", color = Color.Gray) },
-                            onClick = { viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(false)) }
-                        )
+                        DropdownMenuItem(text = { Text("Nessun calendario, creane uno!", color = Color.Gray) }, onClick = { viewModel.onAction(AddCalendarEventAction.ToggleTypeExpanded(false)) })
                     } else {
                         state.calendarTypes.forEach { cal ->
                             DropdownMenuItem(
                                 text = {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
+                                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(12.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(android.graphics.Color.parseColor(cal.color)))
-                                            )
+                                            Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(AndroidColor.parseColor(cal.color))))
                                             Spacer(Modifier.width(12.dp))
                                             Text(cal.name)
                                         }
-                                        // Tasto elimina tipo di calendario
-                                        IconButton(
-                                            onClick = {
-                                                calendarToDelete = cal
-                                            },
-                                            modifier = Modifier.size(32.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = "Elimina Calendario",
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                        IconButton(onClick = { calendarToDelete.value = cal }, modifier = Modifier.size(32.dp)) {
+                                            Icon(Icons.Default.Delete, "Elimina", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                                         }
                                     }
                                 },
-                                onClick = {
-                                    viewModel.onAction(AddCalendarEventAction.OnCalendarChanged(cal.id))
-                                }
+                                onClick = { viewModel.onAction(AddCalendarEventAction.OnCalendarChanged(cal.id)) }
                             )
                         }
                     }
                 }
             }
 
-            // --- DATA ---
+            // Selezione Data
             Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
+                UniSphereTextField(
                     value = state.selectedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
                     onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Data") },
-                    leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
+                    label = "Data",
+                    leadingIcon = Icons.Default.CalendarToday,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Box(Modifier.matchParentSize().clickable {
-                    focusManager.clearFocus()
-                    viewModel.onAction(AddCalendarEventAction.ToggleDatePicker(true))
-                })
+                Box(Modifier.matchParentSize().clickable { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.ToggleDatePicker(true)) })
             }
 
-            // --- ORARI ---
+            // Intervallo Orario
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
-                    OutlinedTextField(
+                    UniSphereTextField(
                         value = state.selectedStartTime.format(DateTimeFormatter.ofPattern("HH:mm")),
                         onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Inizio") },
+                        label = "Inizio",
+                        leadingIcon = Icons.Default.AccessTime,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Box(Modifier.matchParentSize().clickable {
-                        focusManager.clearFocus()
-                        viewModel.onAction(AddCalendarEventAction.ToggleStartTimePicker(true))
-                    })
+                    Box(Modifier.matchParentSize().clickable { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.ToggleStartTimePicker(true)) })
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    OutlinedTextField(
+                    UniSphereTextField(
                         value = state.selectedEndTime.format(DateTimeFormatter.ofPattern("HH:mm")),
                         onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Fine") },
+                        label = "Fine",
+                        leadingIcon = Icons.Default.AccessTime,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Box(Modifier.matchParentSize().clickable {
-                        focusManager.clearFocus()
-                        viewModel.onAction(AddCalendarEventAction.ToggleEndTimePicker(true))
-                    })
+                    Box(Modifier.matchParentSize().clickable { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.ToggleEndTimePicker(true)) })
                 }
             }
 
-            // --- LUOGO ---
+            // Logica Luogo GPS
             ExposedDropdownMenuBox(
-                expanded = state.isLocationExpanded,
+                expanded = state.isLocationExpanded && state.locationSuggestions.isNotEmpty(),
                 onExpandedChange = { viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(it)) }
             ) {
-                OutlinedTextField(
+                UniSphereTextField(
                     value = state.location,
-                    onValueChange = { viewModel.onAction(AddCalendarEventAction.OnLocationChanged(it)) },
-                    label = { Text("Luogo") },
-                    leadingIcon = { Icon(Icons.Default.Place, contentDescription = null) },
+                    onValueChange = { nuovoLuogo -> viewModel.onAction(AddCalendarEventAction.OnLocationChanged(nuovoLuogo)) },
+                    label = "Luogo",
+                    leadingIcon = Icons.Default.Place,
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable).fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     trailingIcon = {
                         if (state.isLoadingLocation) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    val fineLoc = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                    if (fineLoc) viewModel.onAction(AddCalendarEventAction.OnGetCurrentLocation)
+                                    else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
+                                }
+                            ) { Icon(Icons.Default.MyLocation, "Usa posizione attuale", tint = MaterialTheme.colorScheme.primary) }
                         }
-                    },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                    }
                 )
 
-                ExposedDropdownMenu(
-                    expanded = state.isLocationExpanded,
-                    onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false)) }
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.MyLocation, null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(12.dp))
-                                Text("Posizione attuale", fontWeight = FontWeight.Bold)
-                            }
-                        },
-                        onClick = {
-                            viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false))
-                            val fineLoc = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                            if (fineLoc) viewModel.onAction(AddCalendarEventAction.OnGetCurrentLocation)
-                            else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
+                if (state.locationSuggestions.isNotEmpty()) {
+                    ExposedDropdownMenu(expanded = state.isLocationExpanded, onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false)) }) {
+                        state.locationSuggestions.forEach { suggestion ->
+                            DropdownMenuItem(text = { Text(suggestion) }, onClick = { viewModel.onAction(AddCalendarEventAction.OnLocationChanged(suggestion)); viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false)); focusManager.clearFocus() })
                         }
-                    )
-                    state.locationSuggestions.forEach { suggestion ->
-                        DropdownMenuItem(
-                            text = { Text(suggestion) },
-                            onClick = {
-                                viewModel.onAction(AddCalendarEventAction.OnLocationChanged(suggestion))
-                                viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(false))
-                                focusManager.clearFocus()
-                            }
-                        )
                     }
                 }
             }
 
-            // --- NOTE ---
-            OutlinedTextField(
+            // Note Aggiuntive
+            UniSphereTextField(
                 value = state.description,
                 onValueChange = { viewModel.onAction(AddCalendarEventAction.OnDescriptionChanged(it)) },
-                label = { Text("Note aggiuntive") },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                label = "Note aggiuntive",
+                leadingIcon = null,
+                singleLine = false,
+                minLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done)
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- BOTTONE SALVA ---
-            Button(
-                onClick = {
-                    focusManager.clearFocus()
-                    viewModel.onAction(AddCalendarEventAction.OnSaveClicked) {
-                        navController.popBackStack()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(12.dp),
+            // Bottone Salva Evento
+            UniSphereButton(
+                text = "Salva Evento",
+                onClick = { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.OnSaveClicked) { navController.popBackStack() } },
+                modifier = Modifier.fillMaxWidth(),
                 enabled = state.title.isNotBlank() && state.selectedCalendarId != 0
-            ) {
-                Text("Salva Evento", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
+            )
             Spacer(modifier = Modifier.height(40.dp))
         }
     }
 
-    // --- DIALOGS DI CREAZIONE ED ELIMINAZIONE CALENDARI ---
-
-    if (showCreateDialog) {
+    // Dialog: Creazione Tipo Calendario
+    if (showCreateDialog.value) {
         var newCalName by remember { mutableStateOf("") }
         var selectedColorHex by remember { mutableStateOf("#34C759") }
         val palette = listOf("#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#AF52DE", "#8E8E93")
 
         AlertDialog(
-            onDismissRequest = { showCreateDialog = false },
+            onDismissRequest = { showCreateDialog.value = false },
             title = { Text("Nuovo Tipo Calendario", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(
-                        value = newCalName,
-                        onValueChange = { newCalName = it },
-                        label = { Text("Nome Calendario") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    UniSphereTextField(value = newCalName, onValueChange = { newCalName = it }, label = "Nome Calendario", modifier = Modifier.fillMaxWidth())
                     Text("Scegli Colore", style = MaterialTheme.typography.labelLarge)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         palette.forEach { hex ->
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(android.graphics.Color.parseColor(hex)))
-                                    .clickable { selectedColorHex = hex }
-                                    .border(
-                                        width = if (selectedColorHex == hex) 3.dp else 0.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shape = CircleShape
-                                    )
-                            )
+                            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(Color(AndroidColor.parseColor(hex))).clickable { selectedColorHex = hex }.border(if (selectedColorHex == hex) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape))
                         }
                     }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.onAction(AddCalendarEventAction.OnCreateCalendarType(newCalName, selectedColorHex))
-                        showCreateDialog = false
-                    },
-                    enabled = newCalName.isNotBlank()
-                ) { Text("Crea") }
+                UniSphereButton(text = "Crea", onClick = { viewModel.onAction(AddCalendarEventAction.OnCreateCalendarType(newCalName, selectedColorHex)); showCreateDialog.value = false }, enabled = newCalName.isNotBlank())
             },
-            dismissButton = {
-                TextButton(onClick = { showCreateDialog = false }) { Text("Annulla") }
-            }
+            dismissButton = { TextButton(onClick = { showCreateDialog.value = false }) { Text("Annulla") } }
         )
     }
 
-    calendarToDelete?.let { cal ->
-        AlertDialog(
-            onDismissRequest = { calendarToDelete = null },
-            title = { Text("Elimina Calendario") },
-            text = { Text("Sei sicuro di voler eliminare il calendario \"${cal.name}\"?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.onAction(AddCalendarEventAction.OnDeleteCalendarType(cal))
-                        calendarToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) { Text("Elimina") }
+    val calTarget = calendarToDelete.value
+    if (calTarget != null) {
+        UniSphereAlertDialog(
+            title = "Elimina Calendario",
+            text = "Sei sicuro di voler eliminare il calendario \"${calTarget.name}\"?",
+            confirmText = "Elimina",
+            onConfirm = {
+                viewModel.onAction(AddCalendarEventAction.OnDeleteCalendarType(calTarget))
+                calendarToDelete.value = null
             },
-            dismissButton = {
-                TextButton(onClick = { calendarToDelete = null }) { Text("Annulla") }
-            }
+            onDismiss = { calendarToDelete.value = null },
+            dismissText = "Annulla"
         )
     }
 
-    // --- DIALOGS STANDARD (DatePicker e TimePickers) ---
+    // Picker nativi di sistema
     if (state.showDatePicker) {
         val datePickerState = rememberDatePickerState()
         DatePickerDialog(
@@ -424,24 +315,17 @@ fun AddCalendarEvent(
         val timePickerState = rememberTimePickerState(initialHour = state.selectedStartTime.hour, initialMinute = state.selectedStartTime.minute)
         AlertDialog(
             onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleStartTimePicker(false)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.onAction(AddCalendarEventAction.OnStartTimeChanged(LocalTime.of(timePickerState.hour, timePickerState.minute)))
-                }) { Text("OK") }
-            },
+            confirmButton = { TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.OnStartTimeChanged(LocalTime.of(timePickerState.hour, timePickerState.minute))) }) { Text("OK") } },
             text = { TimePicker(state = timePickerState) }
         )
     }
 
+    // CORREZIONE COMPLETATA: Semplificato il blocco logico orario rimuovendo il controllo or duplicato
     if (state.showEndTimePicker) {
         val timePickerState = rememberTimePickerState(initialHour = state.selectedEndTime.hour, initialMinute = state.selectedEndTime.minute)
         AlertDialog(
             onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleEndTimePicker(false)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.onAction(AddCalendarEventAction.OnEndTimeChanged(LocalTime.of(timePickerState.hour, timePickerState.minute)))
-                }) { Text("OK") }
-            },
+            confirmButton = { TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.OnEndTimeChanged(LocalTime.of(timePickerState.hour, timePickerState.minute))) }) { Text("OK") } },
             text = { TimePicker(state = timePickerState) }
         )
     }

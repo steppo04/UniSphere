@@ -1,7 +1,6 @@
 package com.example.unisphere.ui.screen.profile
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,42 +15,31 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereAlertDialog
+import com.example.unisphere.ui.composables.UniSphereAvatar
+import com.example.unisphere.ui.composables.UniSphereButton
+import com.example.unisphere.ui.composables.UniSphereTextField
 import com.example.unisphere.ui.utils.rememberImagePicker
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     navController: NavHostController,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
-    val context = LocalContext.current
     val scrollState = rememberScrollState()
 
     var refreshTrigger by remember { mutableStateOf(System.currentTimeMillis()) }
-
-    val imageModel = remember(state.profilePictureUri, refreshTrigger) {
-        ImageRequest.Builder(context)
-            .data(state.profilePictureUri)
-            .crossfade(true)
-            .setParameter("refresh", refreshTrigger.toString())
-            .build()
-    }
 
     var showEditUsernameDialog by remember { mutableStateOf(false) }
     var showEditEmailDialog by remember { mutableStateOf(false) }
@@ -78,45 +66,26 @@ fun ProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- AVATAR CON MONOGRAMMA DI RISERVA ---
-            Box(
-                modifier = Modifier
-                    .size(110.dp)
-                    .clickable { openImagePicker() },
-                contentAlignment = Alignment.BottomEnd
-            ) {
-                if (!state.profilePictureUri.isNullOrEmpty()) {
-                    AsyncImage(
-                        model = imageModel,
-                        contentDescription = "Profile Picture",
+            UniSphereAvatar(
+                username = state.username,
+                profilePictureUri = state.profilePictureUri?.let {
+                    if (it.isNotEmpty()) "$it?refresh=$refreshTrigger" else it
+                },
+                size = 110.dp,
+                onClick = openImagePicker,
+                badge = {
+                    Surface(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .border(1.dp, Color.LightGray.copy(alpha = 0.4f), CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    val initial = state.username.take(1).uppercase()
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(Brush.linearGradient(colors = listOf(Color(0xFFCFD8DC), Color(0xFF90A4AE)))),
-                        contentAlignment = Alignment.Center
+                            .size(32.dp)
+                            .align(Alignment.BottomEnd),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        tonalElevation = 2.dp
                     ) {
-                        Text(text = initial.ifBlank { "U" }, fontSize = 38.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Icon(Icons.Default.CameraAlt, "Modifica", modifier = Modifier.padding(7.dp), tint = Color.White)
                     }
                 }
-
-                Surface(
-                    modifier = Modifier.size(32.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    tonalElevation = 2.dp
-                ) {
-                    Icon(Icons.Default.CameraAlt, "Modifica", modifier = Modifier.padding(7.dp), tint = Color.White)
-                }
-            }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "${state.name} ${state.surname}".trim().ifBlank { "Utente UniSphere" }, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -124,7 +93,6 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // --- GRUPPO DETTAGLI ACCOUNT ---
             AppleSettingsGroup(title = "Dettagli Account") {
                 ProfileInfoItem(icon = Icons.Default.Badge, label = "Nome completo", value = "${state.name} ${state.surname}")
                 ProfileDivider()
@@ -141,7 +109,6 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // --- GRUPPO PREFERENZE DI SISTEMA ---
             AppleSettingsGroup(title = "Preferenze Applicazione") {
                 SettingsItem(icon = Icons.Default.Palette, title = "Tema dell'applicazione", subtitle = state.currentTheme) {
                     showThemeDialog = true
@@ -158,7 +125,6 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(36.dp))
 
-            // --- RIPRISTINATO: BOTTONE LOGOUT ELEVATED ROSSO CLASSICO ---
             Button(
                 onClick = {
                     viewModel.logout {
@@ -182,8 +148,6 @@ fun ProfileScreen(
         }
     }
 
-    // --- POPUP DIALOGS INTERATTIVI ---
-
     if (showEditUsernameDialog) {
         var tempUsername by remember { mutableStateOf(state.username) }
         AlertDialog(
@@ -191,16 +155,25 @@ fun ProfileScreen(
             title = { Text("Modifica Username", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    OutlinedTextField(value = tempUsername, onValueChange = { tempUsername = it }, label = { Text("Nuovo Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), isError = state.dialogError != null)
+                    UniSphereTextField(
+                        value = tempUsername,
+                        onValueChange = { tempUsername = it },
+                        label = "Nuovo Username",
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = state.dialogError != null
+                    )
                     if (state.dialogError != null) {
                         Text(state.dialogError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    viewModel.updateUsername(tempUsername) { success -> if (success) showEditUsernameDialog = false }
-                }) { Text("Salva") }
+                UniSphereButton(
+                    text = "Salva",
+                    onClick = {
+                        viewModel.updateUsername(tempUsername) { success -> if (success) showEditUsernameDialog = false }
+                    }
+                )
             },
             dismissButton = { TextButton(onClick = { showEditUsernameDialog = false }) { Text("Annulla") } }
         )
@@ -213,16 +186,25 @@ fun ProfileScreen(
             title = { Text("Modifica Email", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    OutlinedTextField(value = tempEmail, onValueChange = { tempEmail = it }, label = { Text("Nuovo indirizzo email") }, singleLine = true, modifier = Modifier.fillMaxWidth(), isError = state.dialogError != null)
+                    UniSphereTextField(
+                        value = tempEmail,
+                        onValueChange = { tempEmail = it },
+                        label = "Nuovo indirizzo email",
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = state.dialogError != null
+                    )
                     if (state.dialogError != null) {
                         Text(state.dialogError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    viewModel.updateEmail(tempEmail) { success -> if (success) showEditEmailDialog = false }
-                }) { Text("Salva") }
+                UniSphereButton(
+                    text = "Salva",
+                    onClick = {
+                        viewModel.updateEmail(tempEmail) { success -> if (success) showEditEmailDialog = false }
+                    }
+                )
             },
             dismissButton = { TextButton(onClick = { showEditEmailDialog = false }) { Text("Annulla") } }
         )
@@ -236,7 +218,13 @@ fun ProfileScreen(
                 Column {
                     listOf("Chiaro", "Scuro", "Default").forEach { theme ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { viewModel.setTheme(theme); showThemeDialog = false }.padding(vertical = 12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setTheme(theme)
+                                    showThemeDialog = false
+                                }
+                                .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = (state.currentTheme == theme), onClick = null)
@@ -250,12 +238,14 @@ fun ProfileScreen(
         )
     }
 
+    // --- REFACTOR COMPLETATO: Sostituito il vecchio blocco AlertDialog nativo con UniSphereAlertDialog ---
     if (showAppInfoDialog) {
-        AlertDialog(
-            onDismissRequest = { showAppInfoDialog = false },
-            title = { Text("Info UniSphere", fontWeight = FontWeight.Bold) },
-            text = { Text("UniSphere.\nSviluppato con Jetpack Compose, Hilt, Room e Supabase.\n\n© 2026 - Tutti i diritti riservati.", fontSize = 14.sp) },
-            confirmButton = { Button(onClick = { showAppInfoDialog = false }) { Text("Chiudi") } }
+        UniSphereAlertDialog(
+            title = "Info UniSphere",
+            text = "UniSphere.\nSviluppato con Jetpack Compose, Hilt, Room e Supabase.\n\n© 2026 - Tutti i diritti riservati.",
+            confirmText = "Chiudi",
+            onConfirm = { showAppInfoDialog = false },
+            onDismiss = { showAppInfoDialog = false }
         )
     }
 }
@@ -278,7 +268,10 @@ fun AppleSettingsGroup(title: String, content: @Composable ColumnScope.() -> Uni
 @Composable
 fun ProfileInfoItem(icon: ImageVector, label: String, value: String, isEditable: Boolean = false, onClick: (() -> Unit)? = null) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = onClick != null) { onClick?.invoke() }.padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(22.dp))
@@ -296,7 +289,10 @@ fun ProfileInfoItem(icon: ImageVector, label: String, value: String, isEditable:
 @Composable
 fun SettingsItem(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(22.dp))

@@ -6,8 +6,10 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.unisphere.db.SupabaseClient
+import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class ResetPasswordState(
     val newPasswordCode: String = "",
@@ -17,17 +19,21 @@ data class ResetPasswordState(
     val isSuccess: Boolean = false
 )
 
-class ResetPasswordViewModel : ViewModel() {
+@HiltViewModel
+class ResetPasswordViewModel @Inject constructor() : ViewModel() {
+
     var state by mutableStateOf(ResetPasswordState())
         private set
+
+    // Regex per il requisiti della password
+    private val passwordRegex = "^(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
 
     fun onPasswordChanged(value: String) {
         state = state.copy(newPasswordCode = value, isError = false)
     }
 
+    // Valida i criteri di sicurezza
     fun finalizePasswordReset(onSuccess: () -> Unit) {
-        // Applichiamo lo stesso regex robusto della registrazione (Min. 8 caratteri, 1 Maiuscola, 1 Numero)
-        val passwordRegex = "^(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
         if (!state.newPasswordCode.matches(passwordRegex)) {
             state = state.copy(
                 isError = true,
@@ -36,10 +42,13 @@ class ResetPasswordViewModel : ViewModel() {
             return
         }
 
+        if (state.isLoading) return
+
         state = state.copy(isLoading = true, isError = false)
+
         viewModelScope.launch {
             try {
-                // Aggiorna sul server di Supabase la password dell'utente agganciato alla sessione del link
+                // Aggiorna sul server di Supabase la password
                 SupabaseClient.client.auth.updateUser {
                     password = state.newPasswordCode
                 }

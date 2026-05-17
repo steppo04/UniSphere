@@ -3,8 +3,8 @@ package com.example.unisphere.ui.screen.accessScreen
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -26,8 +26,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.R
 import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereButton
+import com.example.unisphere.ui.composables.UniSphereTextField
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     navController: NavHostController,
@@ -39,8 +40,8 @@ fun LoginScreen(
     val context = LocalContext.current
 
     LaunchedEffect(state.successMessage) {
-        if (state.successMessage != null) {
-            snackbarHostState.showSnackbar(state.successMessage)
+        state.successMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
             viewModel.onAction(LoginAction.OnDismissMessages)
         }
     }
@@ -48,16 +49,10 @@ fun LoginScreen(
     Scaffold(
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
-                // BANNER UNIFORMATO AI COLORI DEL TUO LOGO (STILE APPLE WIDGET)
                 Card(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        // Usa il verde menta/teal del globo dal tuo tema (funziona anche in Dark Mode!)
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
@@ -65,15 +60,9 @@ fun LoginScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            // Spunta colorata con il Blu istituzionale del cappello per massimo contrasto
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
                         Text(
                             text = data.visuals.message,
-                            // Testo adattivo calcolato da Material 3 per essere perfettamente leggibile
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
@@ -110,30 +99,28 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            OutlinedTextField(
+            // Campo Email Globale
+            UniSphereTextField(
                 value = state.email,
                 onValueChange = { viewModel.onAction(LoginAction.OnEmailChanged(it)) },
-                label = { Text("Email") },
-                leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+                label = "Email",
+                leadingIcon = Icons.Outlined.Email,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                singleLine = true,
                 isError = state.isError
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            OutlinedTextField(
+            // Campo Password Globale
+            UniSphereTextField(
                 value = state.password,
                 onValueChange = { viewModel.onAction(LoginAction.OnPasswordChanged(it)) },
-                label = { Text("Password") },
-                leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                singleLine = true,
+                label = "Password",
+                leadingIcon = Icons.Outlined.Lock,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
                 isError = state.isError
             )
 
@@ -161,7 +148,10 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
+             UniSphereButton(
+                text = "Accedi",
+                isLoading = state.isLoading,
+                modifier = Modifier.fillMaxWidth(),
                 onClick = {
                     viewModel.onAction(
                         action = LoginAction.OnLoginClicked,
@@ -171,19 +161,8 @@ fun LoginScreen(
                             }
                         }
                     )
-                },
-                enabled = !state.isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = MaterialTheme.shapes.large
-            ) {
-                if (state.isLoading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Accedi", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

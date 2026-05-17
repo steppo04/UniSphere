@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,13 +37,18 @@ import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.PointOfInterestEntity
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
+import com.example.unisphere.ui.composables.UniSphereAlertDialog
+import com.example.unisphere.ui.composables.UniSphereButton
+import com.example.unisphere.ui.composables.UniSphereEmptyState
+import com.example.unisphere.ui.composables.UniSphereListItem
+import com.example.unisphere.ui.composables.UniSphereSectionHeader
+import com.example.unisphere.ui.composables.UniSphereTextField
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
     navController: NavHostController,
@@ -49,6 +56,9 @@ fun MapScreen(
 ) {
     val state = viewModel.state
     val context = LocalContext.current
+
+    // Stato locale per catturare il punto da eliminare e attivare il popup globale
+    var poiToDelete by remember { mutableStateOf<PointOfInterestEntity?>(null) }
 
     Configuration.getInstance().userAgentValue = context.packageName
 
@@ -102,6 +112,7 @@ fun MapScreen(
                     modifier = Modifier.fillMaxSize(),
                     update = { mapView ->
                         mapView.overlays.clear()
+
                         state.pois.forEach { poi ->
                             val marker = Marker(mapView)
                             marker.position = GeoPoint(poi.latitude, poi.longitude)
@@ -148,22 +159,15 @@ fun MapScreen(
                     .weight(0.9f)
                     .padding(horizontal = 16.dp)
             ) {
-                Text(
-                    text = "I tuoi luoghi salvati",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                UniSphereSectionHeader(title = "I tuoi luoghi salvati")
 
                 if (state.pois.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().padding(bottom = 16.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Map, null, modifier = Modifier.size(44.dp), tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("Nessun luogo salvato. Aggiungine uno!", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                        }
-                    }
+                    UniSphereEmptyState(
+                        icon = Icons.Default.Map,
+                        title = "Nessun luogo salvato",
+                        description = "La tua mappa è un foglio bianco. Aggiungi i tuoi punti di interesse importanti (es. aule, mense o biblioteche) per trovali subito!",
+                        modifier = Modifier.weight(1f)
+                    )
                 } else {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -174,13 +178,28 @@ fun MapScreen(
                             PoiListItem(
                                 poi = poi,
                                 onClick = { viewModel.onAction(MapAction.OnPoiSelected(poi)) },
-                                onDelete = { viewModel.onAction(MapAction.OnDeletePoiClicked(poi)) }
+                                onDelete = { poiToDelete = poi }
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    // --- REFACTOR COMPLETATO: Sostituito il vecchio blocco AlertDialog nativo con UniSphereAlertDialog ---
+    poiToDelete?.let { poi ->
+        UniSphereAlertDialog(
+            title = "Elimina Luogo",
+            text = "Sei sicuro di voler eliminare \"${poi.name}\"? Questo rimuoverà il marker permanente dalla tua mappa.",
+            confirmText = "Elimina",
+            onConfirm = {
+                viewModel.onAction(MapAction.OnDeletePoiClicked(poi))
+                poiToDelete = null
+            },
+            onDismiss = { poiToDelete = null },
+            dismissText = "Annulla"
+        )
     }
 
     if (state.showAddDialog) {
@@ -206,40 +225,27 @@ fun MapScreen(
 @Composable
 fun PoiListItem(poi: PointOfInterestEntity, onClick: () -> Unit, onDelete: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+        UniSphereListItem(
+            headlineText = poi.name,
+            supportingText = poi.address,
+            leadingBarColor = MaterialTheme.colorScheme.primary,
+            onClick = onClick,
+            trailingContent = {
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Elimina",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = poi.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                Text(poi.address, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, modifier = Modifier.padding(top = 1.dp))
-            }
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = "Elimina", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-            }
-        }
+        )
     }
 }
 
@@ -292,7 +298,6 @@ fun PoiSmallCard(poi: PointOfInterestEntity, onClose: () -> Unit, onOpenInMaps: 
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddPoiDialog(
     state: MapState,
@@ -313,40 +318,24 @@ fun AddPoiDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
 
-                TextField(
+                UniSphereTextField(
                     value = state.newPoiName,
-                    onValueChange = { onAction(MapAction.OnNameChanged(it)) },
-                    placeholder = { Text("Nome del luogo (es. Università)") },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent
-                    )
+                    onValueChange = { nome -> onAction(MapAction.OnNameChanged(nome)) },
+                    label = "Nome del luogo (es. Università)",
+                    leadingIcon = Icons.Outlined.Badge,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    TextField(
+                    UniSphereTextField(
                         value = state.newPoiAddress,
-                        onValueChange = {
-                            onAction(MapAction.OnAddressChanged(it))
-                            expanded = it.length >= 3
+                        onValueChange = { indirizzo ->
+                            onAction(MapAction.OnAddressChanged(indirizzo))
+                            expanded = indirizzo.length >= 3
                         },
-                        placeholder = { Text("Indirizzo / Via") },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent
-                        ),
+                        label = "Indirizzo / Via",
+                        leadingIcon = Icons.Outlined.Place,
+                        modifier = Modifier.fillMaxWidth(),
                         trailingIcon = {
                             if (state.isLocating) {
                                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
@@ -376,33 +365,26 @@ fun AddPoiDialog(
                     }
                 }
 
-                TextField(
+                UniSphereTextField(
                     value = state.newPoiNotes,
-                    onValueChange = { onAction(MapAction.OnNotesChanged(it)) },
-                    placeholder = { Text("Note aggiuntive (opzionale)") },
-                    modifier = Modifier.fillMaxWidth().height(80.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent
-                    )
+                    onValueChange = { note -> onAction(MapAction.OnNotesChanged(note)) },
+                    label = "Note aggiuntive (opzionale)",
+                    leadingIcon = null,
+                    singleLine = false,
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            Button(
+            UniSphereButton(
+                text = "Salva",
                 onClick = onConfirm,
-                enabled = state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank(),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text("Salva", fontWeight = FontWeight.Bold)
-            }
+                enabled = state.newPoiName.isNotBlank() && state.newPoiAddress.isNotBlank()
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annulla", color = MaterialTheme.colorScheme.outline) }
+            TextButton(onClick = { onDismiss() }) { Text("Annulla", color = MaterialTheme.colorScheme.outline) }
         }
     )
 }

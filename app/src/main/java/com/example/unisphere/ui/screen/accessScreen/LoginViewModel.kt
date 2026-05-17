@@ -21,40 +21,50 @@ data class LoginState(
     val successMessage: String? = null
 )
 
+// Azioni dell'utente
 sealed interface LoginAction {
     data class OnEmailChanged(val value: String) : LoginAction
     data class OnPasswordChanged(val value: String) : LoginAction
-    object OnLoginClicked : LoginAction
-    object OnForgotPasswordClicked : LoginAction
-    object OnDismissMessages : LoginAction
+    data object OnLoginClicked : LoginAction
+    data object OnForgotPasswordClicked : LoginAction
+    data object OnDismissMessages : LoginAction
 }
 
 @HiltViewModel
 class LoginViewModel @Inject constructor() : ViewModel() {
+
     var state by mutableStateOf(LoginState())
         private set
 
     fun onAction(action: LoginAction, onSuccess: () -> Unit = {}) {
         when (action) {
-            is LoginAction.OnEmailChanged -> state = state.copy(email = action.value, isError = false, successMessage = null)
-            is LoginAction.OnPasswordChanged -> state = state.copy(password = action.value, isError = false)
-            is LoginAction.OnLoginClicked -> performLogin(onSuccess)
-            is LoginAction.OnForgotPasswordClicked -> performPasswordReset()
-            is LoginAction.OnDismissMessages -> state = snackbarMessageCleaned()
+            is LoginAction.OnEmailChanged -> {
+                state = state.copy(email = action.value, isError = false, successMessage = null)
+            }
+            is LoginAction.OnPasswordChanged -> {
+                state = state.copy(password = action.value, isError = false)
+            }
+            LoginAction.OnLoginClicked -> performLogin(onSuccess)
+            LoginAction.OnForgotPasswordClicked -> performPasswordReset()
+            LoginAction.OnDismissMessages -> {
+                state = state.copy(errorMessage = null, successMessage = null)
+            }
         }
     }
 
+    // Autenticazione asincrona tramite Supabase Auth
     private fun performLogin(onSuccess: () -> Unit) {
-        if (state.isLoading) return
+        if (state.isLoading) return // Evita click multipli concorrenti
+
         viewModelScope.launch {
             state = state.copy(isLoading = true, isError = false, successMessage = null)
             try {
                 SupabaseClient.client.auth.signInWith(Email) {
-                    email = state.email
+                    email = state.email.trim()
                     password = state.password
                 }
                 state = state.copy(isLoading = false)
-                onSuccess()
+                onSuccess() // Callback delegata alla UI per la navigazione
             } catch (e: Exception) {
                 state = state.copy(
                     isLoading = false,
@@ -65,9 +75,10 @@ class LoginViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    // Gestione della logica di business per il ripristino credenziali via Email
     private fun performPasswordReset() {
-        // Ulteriore barriera di sicurezza sul ViewModel
-        if (state.email.trim().isBlank() || !state.email.contains("@")) {
+        val emailTrimmed = state.email.trim()
+        if (emailTrimmed.isBlank() || !emailTrimmed.contains("@")) {
             state = state.copy(
                 isError = true,
                 errorMessage = "Inserisci una mail valida."
@@ -80,7 +91,7 @@ class LoginViewModel @Inject constructor() : ViewModel() {
         viewModelScope.launch {
             state = state.copy(isLoading = true, isError = false, successMessage = null)
             try {
-                SupabaseClient.client.auth.resetPasswordForEmail(state.email.trim())
+                SupabaseClient.client.auth.resetPasswordForEmail(emailTrimmed)
                 state = state.copy(
                     isLoading = false,
                     successMessage = "Email di ripristino inviata! Controlla la posta."
@@ -93,9 +104,5 @@ class LoginViewModel @Inject constructor() : ViewModel() {
                 )
             }
         }
-    }
-
-    private fun snackbarMessageCleaned(): LoginState {
-        return state.copy(errorMessage = null, successMessage = null)
     }
 }

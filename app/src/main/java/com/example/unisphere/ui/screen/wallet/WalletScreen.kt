@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +37,11 @@ import com.example.unisphere.db.local.entity.TransactionCategoryEntity
 import com.example.unisphere.db.local.entity.TransactionEntity
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
+import com.example.unisphere.ui.composables.UniSphereAlertDialog
+import com.example.unisphere.ui.composables.UniSphereButton
+import com.example.unisphere.ui.composables.UniSphereEmptyState
+import com.example.unisphere.ui.composables.UniSphereListItem
+import com.example.unisphere.ui.composables.UniSphereTextField
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -97,7 +105,6 @@ fun WalletScreen(
                     LineChartSection(state.transactions)
                 }
 
-                // --- INTESTAZIONE SEZIONE TRANSAZIONI SENZA IL PULSANTE DI TRONCAMENTO ---
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -122,7 +129,6 @@ fun WalletScreen(
                     }
                 }
 
-                // Logica di controllo filtri attivi
                 val isFilteringActive = state.filterCategoryId != null || state.filterIsIncome != null || state.filterMinAmount.isNotBlank() || state.filterMaxAmount.isNotBlank()
 
                 val transactionsToDisplay = if (state.showAllTransactions || isFilteringActive) {
@@ -146,21 +152,13 @@ fun WalletScreen(
                         )
                     }
 
-                    // --- NUOVO POSIZIONAMENTO CONTINUATIVO: TASTO IN FONDO ALLA LISTA ---
                     if (!isFilteringActive && state.filteredTransactions.size > 5) {
                         item {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                TextButton(
-                                    onClick = { viewModel.onAction(WalletAction.ToggleShowAllTransactions) }
-                                ) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                                TextButton(onClick = { viewModel.onAction(WalletAction.ToggleShowAllTransactions) }) {
                                     Text(
                                         text = if (state.showAllTransactions) "Mostra Meno" else "Vedi tutte le transazioni (${state.filteredTransactions.size})",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.primary
+                                        fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
@@ -202,16 +200,9 @@ fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFFE8F5E9))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFFE8F5E9)).padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.ArrowUpward, null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
@@ -223,11 +214,7 @@ fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
                 }
 
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFFFFEAEA))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFFFFEAEA)).padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.ArrowDownward, null, tint = Color(0xFFC62828), modifier = Modifier.size(16.dp))
@@ -242,7 +229,6 @@ fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
     }
 }
 
-// --- SMART FILTER PANEL COMPRENSIVO DI FIX GEOMETRICI TOTALI NATIVI IOS ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
@@ -252,14 +238,8 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(2.dp)
+                modifier = Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.background).padding(2.dp)
             ) {
                 val selectedType = state.filterIsIncome
                 Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (selectedType == null) MaterialTheme.colorScheme.surface else Color.Transparent).clickable { onAction(WalletAction.OnFilterTypeChanged(null)) }, contentAlignment = Alignment.Center) {
@@ -276,19 +256,12 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
             var menuExpanded by remember { mutableStateOf(false) }
             val currentFilterCat = state.categories.find { it.id == state.filterCategoryId }
             ExposedDropdownMenuBox(expanded = menuExpanded, onExpandedChange = { menuExpanded = it }) {
-                TextField(
+                UniSphereTextField(
                     value = currentFilterCat?.name ?: "Tutte le categorie",
-                    onValueChange = {}, readOnly = true,
-                    placeholder = { Text("Filtra per Categoria") },
-                    modifier = Modifier.menuAnchor().fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent
-                    ),
+                    onValueChange = {},
+                    label = "Filtra per Categoria",
+                    leadingIcon = Icons.Default.Category,
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded) }
                 )
                 ExposedDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -299,37 +272,22 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
                 }
             }
 
-            // CORREZIONE CRITICA: TextField piatti borderless a geometricità fissa 52.dp (Impedisce deformazioni)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextField(
+                UniSphereTextField(
                     value = state.filterMinAmount,
                     onValueChange = { onAction(WalletAction.OnFilterMinAmountChanged(it)) },
-                    placeholder = { Text("Importo Min (€)", color = Color.Gray) },
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent
-                    )
+                    label = "Importo Min (€)",
+                    leadingIcon = Icons.Default.TrendingDown,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
                 )
-                TextField(
+                UniSphereTextField(
                     value = state.filterMaxAmount,
                     onValueChange = { onAction(WalletAction.OnFilterMaxAmountChanged(it)) },
-                    placeholder = { Text("Importo Max (€)", color = Color.Gray) },
-                    modifier = Modifier.weight(1f).height(52.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent
-                    )
+                    label = "Importo Max (€)",
+                    leadingIcon = Icons.Default.TrendingUp,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -378,7 +336,6 @@ fun LineChartSection(transactions: List<TransactionEntity>) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-
             AnimatedContent(
                 targetState = selectedIndex,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -497,7 +454,7 @@ fun LineChartSection(transactions: List<TransactionEntity>) {
 @Composable
 fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
     var showCatDialog by remember { mutableStateOf(false) }
-    var catToDelete by remember { mutableStateOf<TransactionCategoryEntity?>(null) }
+    var calendarCatToDelete by remember { mutableStateOf<TransactionCategoryEntity?>(null) }
     var expandedCats by remember { mutableStateOf(false) }
 
     val selectedCategory = state.categories.find { it.id == state.newTransactionCategoryId }
@@ -530,17 +487,30 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                     }
                 }
 
-                OutlinedTextField(value = state.newTransactionTitle, onValueChange = { viewModel.onAction(WalletAction.OnTitleChanged(it)) }, label = { Text("Titolo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = state.newTransactionAmount, onValueChange = { viewModel.onAction(WalletAction.OnAmountChanged(it)) }, label = { Text("Importo") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                UniSphereTextField(
+                    value = state.newTransactionTitle,
+                    onValueChange = { viewModel.onAction(WalletAction.OnTitleChanged(it)) },
+                    label = "Titolo",
+                    leadingIcon = Icons.Default.Title,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                UniSphereTextField(
+                    value = state.newTransactionAmount,
+                    onValueChange = { viewModel.onAction(WalletAction.OnAmountChanged(it)) },
+                    label = "Importo",
+                    leadingIcon = Icons.Default.AttachMoney,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 ExposedDropdownMenuBox(expanded = expandedCats, onExpandedChange = { expandedCats = it }) {
-                    OutlinedTextField(
+                    UniSphereTextField(
                         value = selectedCategory?.name ?: "Seleziona Categoria",
-                        onValueChange = {}, readOnly = true, label = { Text("Categoria") },
+                        onValueChange = {},
+                        label = "Categoria",
+                        leadingIcon = Icons.Default.Category,
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        leadingIcon = {
-                            selectedCategory?.let { Box(Modifier.size(12.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(it.colorHex)))) }
-                        },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCats) }
                     )
                     ExposedDropdownMenu(expanded = expandedCats, onDismissRequest = { expandedCats = false }) {
@@ -555,7 +525,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                                             Spacer(Modifier.width(8.dp))
                                             Text(cat.name)
                                         }
-                                        IconButton(onClick = { catToDelete = cat }, modifier = Modifier.size(24.dp)) {
+                                        IconButton(onClick = { calendarCatToDelete = cat }, modifier = Modifier.size(24.dp)) {
                                             Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(16.dp))
                                         }
                                     }
@@ -588,7 +558,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
             title = { Text("Nuova Categoria", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(value = newCatName, onValueChange = { newCatName = it }, label = { Text("Nome Categoria") }, singleLine = true)
+                    UniSphereTextField(value = newCatName, onValueChange = { newCatName = it }, label = "Nome Categoria", modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         palette.forEach { hex ->
                             Box(Modifier.size(28.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex))).clickable { selectedColorHex = hex }.border(if (selectedColorHex == hex) 2.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape))
@@ -602,47 +572,37 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
         )
     }
 
-    catToDelete?.let { cat ->
-        AlertDialog(
-            onDismissRequest = { catToDelete = null },
-            title = { Text("Elimina Categoria", fontWeight = FontWeight.Bold) },
-            text = { Text("Eliminando la categoria \"${cat.name}\" eliminerai anche tutte le transazioni collegate ad essa. Continuare?") },
-            confirmButton = { Button(onClick = { viewModel.onAction(WalletAction.OnDeleteCategoryType(cat)); catToDelete = null }) { Text("Elimina") } }
+    // --- REFACTOR COMPLETATO: Sostituito AlertDialog nativo con UniSphereAlertDialog globale ---
+    calendarCatToDelete?.let { cat ->
+        UniSphereAlertDialog(
+            title = "Elimina Categoria",
+            text = "Eliminando la categoria \"${cat.name}\" eliminerai anche tutte le transazioni collegate ad essa. Continuare?",
+            confirmText = "Elimina",
+            onConfirm = {
+                viewModel.onAction(WalletAction.OnDeleteCategoryType(cat))
+                calendarCatToDelete = null
+            },
+            onDismiss = { calendarCatToDelete = null },
+            dismissText = "Annulla"
         )
     }
 }
 
+// --- REFACTOR COMPLETATO: Sostituito l'intero blocco manuale lungo con UniSphereEmptyState globale ---
 @Composable
 fun EmptyDashboardState(onAddClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.LightGray.copy(alpha = 0.4f))
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier.size(72.dp).clip(CircleShape).background(Brush.linearGradient(colors = listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(imageVector = Icons.Default.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(text = "Nessun movimento registrato", fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = "Il tuo riepilogo finanziario personale è vuoto. Inizia a tracciare le tue spese quotidiane o le tue entrate per sbloccare i grafici.", fontSize = 13.sp, color = Color.Gray, textAlign = TextAlign.Center, lineHeight = 18.sp)
-            Spacer(modifier = Modifier.height(24.dp))
+    UniSphereEmptyState(
+        icon = Icons.Default.AccountBalanceWallet,
+        title = "Nessun movimento registrato",
+        description = "Il tuo riepilogo finanziario personale è vuoto. Inizia a tracciare le tue spese quotidiane o le tue entrate per sbloccare i grafici.",
+        actionButton = {
             Button(onClick = onAddClick, shape = RoundedCornerShape(14.dp)) {
                 Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Aggiungi Prima Transazione", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
-    }
+    )
 }
 
 @Composable
@@ -687,23 +647,32 @@ fun PieChartSection(transactions: List<TransactionEntity>, categories: List<Tran
 
 @Composable
 fun TransactionItem(transaction: TransactionEntity, categoryName: String, colorHex: String, onClick: () -> Unit) {
+    val barColor = remember(colorHex) {
+        try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Gray }
+    }
+    val displayAmount = if (transaction.isIncome) "+€${transaction.amount}" else "-€${transaction.amount}"
+    val amountColor = if (transaction.isIncome) Color(0xFF2E7D32) else Color(0xFFC62828)
+
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(10.dp).background(Color(android.graphics.Color.parseColor(colorHex)), CircleShape))
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(transaction.title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text("$categoryName • ${transaction.date.format(DateTimeFormatter.ofPattern("dd MMM"))}", fontSize = 12.sp, color = Color.Gray)
+        UniSphereListItem(
+            headlineText = transaction.title,
+            supportingText = "$categoryName • ${transaction.date.format(DateTimeFormatter.ofPattern("dd MMM"))}",
+            leadingBarColor = barColor,
+            onClick = onClick,
+            trailingContent = {
+                Text(
+                    text = displayAmount,
+                    color = amountColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
             }
-            val displayAmount = if (transaction.isIncome) "+€${transaction.amount}" else "-€${transaction.amount}"
-            val amountColor = if (transaction.isIncome) Color(0xFF2E7D32) else Color(0xFFC62828)
-            Text(displayAmount, color = amountColor, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        }
+        )
     }
 }
 
@@ -743,11 +712,20 @@ fun TransactionDetailsDialog(state: WalletState, viewModel: WalletViewModel) {
                         FilterChip(selected = !isIncome, onClick = { isIncome = false }, label = { Text("Uscita") }, modifier = Modifier.weight(1f))
                         FilterChip(selected = isIncome, onClick = { isIncome = true }, label = { Text("Entrata") }, modifier = Modifier.weight(1f))
                     }
-                    OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Titolo") })
-                    OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Importo") })
+
+                    UniSphereTextField(value = title, onValueChange = { title = it }, label = "Titolo", modifier = Modifier.fillMaxWidth())
+                    UniSphereTextField(value = amount, onValueChange = { amount = it }, label = "Importo", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+
                     var expandedCats by remember { mutableStateOf(false) }
                     ExposedDropdownMenuBox(expanded = expandedCats, onExpandedChange = { expandedCats = it }) {
-                        OutlinedTextField(value = state.categories.find { it.id == categoryId }?.name ?: "Seleziona", onValueChange = {}, readOnly = true, label = { Text("Categoria") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                        UniSphereTextField(
+                            value = state.categories.find { it.id == categoryId }?.name ?: "Seleziona",
+                            onValueChange = {},
+                            label = "Categoria",
+                            leadingIcon = Icons.Default.Category,
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCats) }
+                        )
                         ExposedDropdownMenu(expanded = expandedCats, onDismissRequest = { expandedCats = false }) {
                             state.categories.forEach { cat -> DropdownMenuItem(text = { Text(cat.name) }, onClick = { categoryId = cat.id; expandedCats = false }) }
                         }

@@ -3,8 +3,8 @@ package com.example.unisphere.ui.screen.accessScreen
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -26,9 +25,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.unisphere.ui.composables.NavigationRoute
+import com.example.unisphere.ui.composables.UniSphereButton
+import com.example.unisphere.ui.composables.UniSphereTextField
 import com.example.unisphere.ui.utils.rememberImagePicker
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignInScreen(
     navController: NavHostController,
@@ -37,7 +37,6 @@ fun SignInScreen(
     val state = viewModel.state
     val scrollState = rememberScrollState()
 
-    // Agganciamo il picker dell'immagine all'action del ViewModel
     val openImagePicker = rememberImagePicker { uri ->
         viewModel.onAction(SignInAction.OnImageSelected(uri))
     }
@@ -53,31 +52,19 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- SELEZIONE IMMAGINE PROFILO REATTIVA ---
         Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clickable { openImagePicker() },
+            modifier = Modifier.size(120.dp).clickable { openImagePicker() },
             contentAlignment = Alignment.BottomEnd
         ) {
             if (!state.profilePictureUri.isNullOrEmpty()) {
                 AsyncImage(
                     model = state.profilePictureUri,
                     contentDescription = "Profile Picture",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape),
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
             } else {
-                Icon(
-                    imageVector = Icons.Default.AccountCircle,
-                    contentDescription = "Profile Picture",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                Icon(Icons.Default.AccountCircle, "Profile Picture", modifier = Modifier.fillMaxSize().clip(CircleShape), tint = MaterialTheme.colorScheme.primary)
             }
 
             Surface(
@@ -86,12 +73,7 @@ fun SignInScreen(
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 tonalElevation = 4.dp
             ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Change photo",
-                    modifier = Modifier.padding(8.dp),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                Icon(Icons.Default.CameraAlt, "Change photo", modifier = Modifier.padding(8.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
         }
 
@@ -106,69 +88,59 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        OutlinedTextField(
+        UniSphereTextField(
             value = state.name,
             onValueChange = { viewModel.onAction(SignInAction.OnNameChanged(it)) },
-            label = { Text("Nome") },
-            leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+            label = "Nome",
+            leadingIcon = Icons.Outlined.Person,
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
             isError = state.isError
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
+        UniSphereTextField(
             value = state.surname,
             onValueChange = { viewModel.onAction(SignInAction.OnSurnameChanged(it)) },
-            label = { Text("Cognome") },
-            leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+            label = "Cognome",
+            leadingIcon = Icons.Outlined.Person,
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
             isError = state.isError
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
+        UniSphereTextField(
             value = state.username,
             onValueChange = { viewModel.onAction(SignInAction.OnUsernameChanged(it)) },
-            label = { Text("Username") },
-            leadingIcon = { Icon(Icons.Outlined.Badge, contentDescription = null) },
+            label = "Username",
+            leadingIcon = Icons.Outlined.Badge,
             modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
             isError = state.isError
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
+        UniSphereTextField(
             value = state.email,
             onValueChange = { viewModel.onAction(SignInAction.OnEmailChanged(it)) },
-            label = { Text("Email") },
-            leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
+            label = "Email",
+            leadingIcon = Icons.Outlined.Email,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            modifier = Modifier.fillMaxWidth(),
             isError = state.isError
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
+        UniSphereTextField(
             value = state.password,
             onValueChange = { viewModel.onAction(SignInAction.OnPasswordChanged(it)) },
-            label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            singleLine = true,
+            label = "Password",
+            leadingIcon = Icons.Outlined.Lock,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth(),
             isError = state.isError
         )
 
@@ -183,26 +155,19 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Button(
+        // REFACTOR COMPLETATO: Sostituito il vecchio blocco Button/CircularProgressIndicator con UniSphereButton
+        UniSphereButton(
+            text = "Crea Account",
+            isLoading = state.isLoading,
+            modifier = Modifier.fillMaxWidth(),
             onClick = {
                 viewModel.onAction(SignInAction.OnCreateAccountClicked) {
                     navController.navigate(NavigationRoute.Homescreen) {
                         popUpTo(NavigationRoute.SignInScreen) { inclusive = true }
                     }
                 }
-            },
-            enabled = !state.isLoading,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = MaterialTheme.shapes.large,
-        ) {
-            if (state.isLoading) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-            } else {
-                Text("Crea Account", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
-        }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
