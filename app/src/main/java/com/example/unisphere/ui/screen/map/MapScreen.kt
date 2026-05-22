@@ -12,8 +12,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Badge
@@ -57,7 +59,6 @@ fun MapScreen(
     val state = viewModel.state
     val context = LocalContext.current
 
-    // Stato locale per catturare il punto da eliminare e attivare il popup globale
     var poiToDelete by remember { mutableStateOf<PointOfInterestEntity?>(null) }
 
     Configuration.getInstance().userAgentValue = context.packageName
@@ -162,12 +163,20 @@ fun MapScreen(
                 UniSphereSectionHeader(title = "I tuoi luoghi salvati")
 
                 if (state.pois.isEmpty()) {
-                    UniSphereEmptyState(
-                        icon = Icons.Default.Map,
-                        title = "Nessun luogo salvato",
-                        description = "La tua mappa è un foglio bianco. Aggiungi i tuoi punti di interesse importanti (es. aule, mense o biblioteche) per trovali subito!",
-                        modifier = Modifier.weight(1f)
-                    )
+                    // FIX: Wrapper scrollabile indipendente per permettere la lettura dell'Empty State su schermi compatti
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        UniSphereEmptyState(
+                            icon = Icons.Default.Map,
+                            title = "Nessun luogo salvato",
+                            description = "La tua mappa è un foglio bianco. Aggiungi i tuoi punti di interesse importanti (es. aule, mense o biblioteche) per trovarli subito!",
+                            modifier = Modifier.padding(vertical = 16.dp) // Rimosso il weight e aggiunto padding per respirare
+                        )
+                    }
                 } else {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -187,7 +196,6 @@ fun MapScreen(
         }
     }
 
-    // --- REFACTOR COMPLETATO: Sostituito il vecchio blocco AlertDialog nativo con UniSphereAlertDialog ---
     poiToDelete?.let { poi ->
         UniSphereAlertDialog(
             title = "Elimina Luogo",
