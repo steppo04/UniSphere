@@ -54,7 +54,8 @@ data class HouseInvitationEntity(
 data class CleaningServiceEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val houseId: Int,
-    val name: String
+    val name: String,
+    val isCompleted: Boolean = false
 )
 
 // 5. I TURNI ASSEGNATI PER SETTIMANA
@@ -70,7 +71,8 @@ data class CleaningAssignmentEntity(
     val userUid: String,
     val username: String,
     val weekOfYear: Int, // Usiamo la settimana e l'anno per calcolare la rotazione automatica
-    val year: Int
+    val year: Int,
+    val isCompleted: Boolean
 )
 
 // 6. TRANSAZIONI CONDIVISE (Splitwise Base)

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,17 +54,15 @@ fun HomeScreen(
     val state = viewModel.state
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Stati di controllo per i Dialog di inserimento e filtri
     var showInviteDialog by remember { mutableStateOf(false) }
     var showServiceDialog by remember { mutableStateOf(false) }
     var showExpenseDialog by remember { mutableStateOf(false) }
     var showSettleDialog by remember { mutableStateOf(false) }
     var showAllTxDetailsPage by remember { mutableStateOf(false) }
 
-    // Stati locali per intercettare le conferme tramite UniSphereAlertDialog globale
-    var txToDeleteId by remember { mutableStateOf<Int?>(null) }
-    var showDeleteHouseConfirm by remember { mutableStateOf(false) }
-    var showLeaveHouseConfirm by remember { mutableStateOf(false) }
+    val txToDeleteId = remember { mutableStateOf<Int?>(null) }
+    val showDeleteHouseConfirm = remember { mutableStateOf(false) }
+    val showLeaveHouseConfirm = remember { mutableStateOf(false) }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let {
@@ -123,7 +122,7 @@ fun HomeScreen(
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         FilledIconButton(onClick = { viewModel.onAction(UniHomeAction.OnAcceptInvitation(invitation)) }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFE8F5E9))) { Icon(Icons.Default.Check, null, tint = Color(0xFF2E7D32)) }
-                                        FilledIconButton(onClick = { viewModel.onAction(UniHomeAction.OnDeclineInvitation(invitation.id)) }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFFFEAEA))) { Icon(Icons.Default.Close, null, tint = Color(0xFFC62828)) }
+                                        FilledIconButton(onClick = { viewModel.onAction(UniHomeAction.OnDeclineInvitation(invitation.id)) }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFFFFEBEE))) { Icon(Icons.Default.Close, null, tint = Color(0xFFC62828)) }
                                     }
                                 }
                             }
@@ -152,8 +151,7 @@ fun HomeScreen(
                                 trailingContent = {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text("${String.format(java.util.Locale.US, "%.2f", tx.amount)}€", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
-                                        // REFACTOR: Intercettazione ID per eliminazione protetta da pop-up
-                                        IconButton(onClick = { txToDeleteId = tx.id }) { Icon(Icons.Default.DeleteOutline, null, tint = Color.Red.copy(alpha = 0.6f)) }
+                                        IconButton(onClick = { txToDeleteId.value = tx.id }) { Icon(Icons.Default.DeleteOutline, null, tint = Color.Red.copy(alpha = 0.6f)) }
                                     }
                                 }
                             )
@@ -164,14 +162,20 @@ fun HomeScreen(
         } else {
             Column(modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 RoommatesSection(members = state.members, adminUid = state.adminUid, currentUserId = state.currentUserId, onInviteClick = { showInviteDialog = true }, onRemoveMember = { viewModel.onAction(UniHomeAction.OnRemoveMember(it)) })
-                CleaningSection(rotations = state.cleaningRotations, onAddServiceClick = { showServiceDialog = true }, onDeleteService = { viewModel.onAction(UniHomeAction.OnDeleteServiceClicked(it)) })
+
+                CleaningSection(
+                    rotations = state.cleaningRotations,
+                    onAddServiceClick = { showServiceDialog = true },
+                    onDeleteService = { viewModel.onAction(UniHomeAction.OnDeleteServiceClicked(it)) },
+                    onToggleCompleted = { serviceId -> viewModel.onAction(UniHomeAction.OnToggleServiceCompleted(serviceId)) }
+                )
+
                 BalanceSection(balances = state.balances, onAddExpenseClick = { showExpenseDialog = true }, onSettleDebtClick = { showSettleDialog = true }, onOpenDetailsClick = { showAllTxDetailsPage = true })
 
-                // REFACTOR: Bottoni distruttivi intercettati in sicurezza dagli stati di conferma locali
                 OutlinedButton(
                     onClick = {
-                        if (state.currentUserId == state.adminUid) showDeleteHouseConfirm = true
-                        else showLeaveHouseConfirm = true
+                        if (state.currentUserId == state.adminUid) showDeleteHouseConfirm.value = true
+                        else showLeaveHouseConfirm.value = true
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = if (state.currentUserId == state.adminUid) Color.Red else MaterialTheme.colorScheme.primary),
@@ -185,51 +189,48 @@ fun HomeScreen(
         }
     }
 
-    // --- SEZIONE UNISPHEREALERTDIALOG (Popup globali di sicurezza riutilizzabili) ---
-
-    txToDeleteId?.let { txId ->
+    val targetTxId = txToDeleteId.value
+    if (targetTxId != null) {
         UniSphereAlertDialog(
             title = "Elimina Spesa",
-            text = "Sei sicuro di voler cancellare questa transazione? Il bilancio generale dei coinquilini verrà ricalcolato immediatamente.",
+            text = "Sei sicuro di voler cancellare questa transazione? Il bilancio generale verrà ricalcolato.",
             confirmText = "Elimina",
             onConfirm = {
-                viewModel.onAction(UniHomeAction.OnDeleteTransactionClicked(txId))
-                txToDeleteId = null
+                viewModel.onAction(UniHomeAction.OnDeleteTransactionClicked(targetTxId))
+                txToDeleteId.value = null
             },
-            onDismiss = { txToDeleteId = null },
+            onDismiss = { txToDeleteId.value = null },
             dismissText = "Annulla"
         )
     }
 
-    if (showDeleteHouseConfirm) {
+    if (showDeleteHouseConfirm.value) {
         UniSphereAlertDialog(
             title = "Chiudi Casa",
-            text = "Attenzione! Questa azione cancellerà definitivamente la UniHome, rimuovendo tutti i coinquilini, lo storico spese e i turni di pulizia. Continuare?",
+            text = "Attenzione! Questa azione eliminerà definitivamento la UniHome e tutto il suo storico. Continuare?",
             confirmText = "Elimina",
             onConfirm = {
                 viewModel.onAction(UniHomeAction.OnDeleteHouseClicked)
-                showDeleteHouseConfirm = false
+                showDeleteHouseConfirm.value = false
             },
-            onDismiss = { showDeleteHouseConfirm = false },
+            onDismiss = { showDeleteHouseConfirm.value = false },
             dismissText = "Annulla"
         )
     }
 
-    if (showLeaveHouseConfirm) {
+    if (showLeaveHouseConfirm.value) {
         UniSphereAlertDialog(
             title = "Abbandona Casa",
-            text = "Sei sicuro di voler uscire da questo gruppo casa? Non potrai più accedere ai bilanci e ai turni a meno che tu non venga invitato di nuovo.",
+            text = "Sei sicuro di voler uscire da questo gruppo casa?",
             confirmText = "Abbandona",
             onConfirm = {
                 viewModel.onAction(UniHomeAction.OnLeaveHouseClicked)
-                showLeaveHouseConfirm = false
+                showLeaveHouseConfirm.value = false
             },
-            onDismiss = { showLeaveHouseConfirm = false },
+            onDismiss = { showLeaveHouseConfirm.value = false },
             dismissText = "Annulla"
         )
     }
-
-    // --- MODULI INPUT POPUP DIALOGS ---
 
     if (showInviteDialog) {
         var dropdownExpanded by remember { mutableStateOf(false) }
@@ -238,7 +239,13 @@ fun HomeScreen(
             title = { Text("Cerca Coinquilino", fontWeight = FontWeight.Bold) },
             text = {
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    UniSphereTextField(value = state.inviteUserQuery, onValueChange = { viewModel.onAction(UniHomeAction.OnInviteQueryChanged(it)); dropdownExpanded = it.length >= 2 }, label = "Digita lo username...", leadingIcon = Icons.Default.Search, modifier = Modifier.fillMaxWidth())
+                    UniSphereTextField(
+                        value = state.inviteUserQuery,
+                        onValueChange = { viewModel.onAction(UniHomeAction.OnInviteQueryChanged(it)); dropdownExpanded = it.length >= 2 },
+                        label = "Digita lo username...",
+                        leadingIcon = Icons.Default.Search,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     DropdownMenu(expanded = dropdownExpanded && state.searchedUsers.isNotEmpty(), onDismissRequest = { dropdownExpanded = false }, modifier = Modifier.fillMaxWidth(), properties = PopupProperties(focusable = false)) {
                         state.searchedUsers.forEach { user -> DropdownMenuItem(text = { Text(user.username) }, onClick = { viewModel.onAction(UniHomeAction.OnSelectUserToInvite(user)); dropdownExpanded = false; showInviteDialog = false }) }
                     }
@@ -330,7 +337,8 @@ fun RoommatesSection(members: List<HouseMemberEntity>, adminUid: String, current
                             }
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(text = member.username, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        // MODIFICATO: Mostra esplicitamente e tassativamente l'username del coinquilino
+                        Text(text = member.username, style = MaterialTheme.typography.bodySmall, maxLines = 1, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -339,7 +347,12 @@ fun RoommatesSection(members: List<HouseMemberEntity>, adminUid: String, current
 }
 
 @Composable
-fun CleaningSection(rotations: List<CleaningRotationalState>, onAddServiceClick: () -> Unit, onDeleteService: (Int) -> Unit) {
+fun CleaningSection(
+    rotations: List<CleaningRotationalState>,
+    onAddServiceClick: () -> Unit,
+    onDeleteService: (Int) -> Unit,
+    onToggleCompleted: (Int) -> Unit
+) {
     ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -356,10 +369,62 @@ fun CleaningSection(rotations: List<CleaningRotationalState>, onAddServiceClick:
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     rotations.forEach { rotation ->
-                        UniSphereListItem(
-                            headlineText = rotation.serviceName, supportingText = "Questa settimana: ${rotation.assigneeName}", leadingBarColor = MaterialTheme.colorScheme.secondary,
-                            trailingContent = { IconButton(onClick = { onDeleteService(rotation.serviceId) }) { Icon(Icons.Default.DeleteOutline, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp)) } }
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // MODIFICATO: Checkbox premium customizzata molto più elegante e moderna
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        if (rotation.isCompleted) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surface
+                                    )
+                                    .border(
+                                        width = 1.5.dp,
+                                        color = if (rotation.isCompleted) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable { onToggleCompleted(rotation.serviceId) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (rotation.isCompleted) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Completato",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 14.dp)
+                            ) {
+                                Text(
+                                    text = rotation.serviceName,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Questa settimana: ${rotation.assigneeName}",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+
+                            IconButton(onClick = { onDeleteService(rotation.serviceId) }) {
+                                Icon(Icons.Default.DeleteOutline, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                            }
+                        }
                     }
                 }
             }

@@ -84,4 +84,7 @@ interface HouseDao {
 
     @Update
     suspend fun updateGroupTransaction(transaction: GroupTransactionEntity)
+
+    @Query("UPDATE cleaning_services SET isCompleted = NOT isCompleted WHERE id = :serviceId")
+    suspend fun toggleServiceCompletion(serviceId: Int)
 }

@@ -11,7 +11,7 @@ import com.example.unisphere.db.local.entity.*
 import com.example.unisphere.repository.CleaningRotationalState
 import com.example.unisphere.repository.HouseRepository
 import com.example.unisphere.repository.UserBalance
-import com.example.unisphere.repository.HouseRepository.TransactionWithSplits // <--- NUOVO IMPORT
+import com.example.unisphere.repository.HouseRepository.TransactionWithSplits
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Job
@@ -26,11 +26,16 @@ data class UniHomeState(
     val houseName: String = "",
     val adminUid: String = "",
     val currentUserId: String = "",
+
+    // STATO UTENTE GLOBALE REALE
+    val currentUsername: String = "",
+    val currentUserAvatar: String? = null,
+
     val members: List<HouseMemberEntity> = emptyList(),
     val pendingInvitations: List<HouseInvitationEntity> = emptyList(),
     val cleaningRotations: List<CleaningRotationalState> = emptyList(),
     val balances: List<UserBalance> = emptyList(),
-    val transactionsWithSplits: List<TransactionWithSplits> = emptyList(), // <--- AGGIORNATO
+    val transactionsWithSplits: List<TransactionWithSplits> = emptyList(),
 
     val searchedUsers: List<UserEntity> = emptyList(),
     val snackbarMessage: String? = null,
@@ -61,6 +66,8 @@ sealed interface UniHomeAction {
     object OnAddCleaningServiceClicked : UniHomeAction
     data class OnDeleteServiceClicked(val serviceId: Int) : UniHomeAction
 
+    data class OnToggleServiceCompleted(val serviceId: Int) : UniHomeAction
+
     data class OnNewExpenseTitleChanged(val title: String) : UniHomeAction
     data class OnNewExpenseAmountChanged(val amount: String) : UniHomeAction
     data class OnAddExpenseClicked(val selectedSplitMembers: List<HouseMemberEntity>) : UniHomeAction
@@ -78,15 +85,26 @@ class UniHomeViewModel @Inject constructor(
         private set
 
     private val currentUserId = state.currentUserId
-    private val currentUsername = SupabaseClient.client.auth.currentUserOrNull()?.email?.substringBefore("@") ?: "Tu"
-    private val currentUserAvatar = ""
 
     private var houseDataJobs: List<Job> = emptyList()
     private var searchJob: Job? = null
 
     init {
+        loadCurrentUserData()
         observeUserMembership()
         observePendingInvitations()
+    }
+
+    private fun loadCurrentUserData() {
+        viewModelScope.launch {
+            val user = repository.getRealUser(currentUserId)
+            if (user != null) {
+                state = state.copy(
+                    currentUsername = user.username,
+                    currentUserAvatar = user.profilePictureUri
+                )
+            }
+        }
     }
 
     private fun observeUserMembership() {
@@ -120,13 +138,66 @@ class UniHomeViewModel @Inject constructor(
 
     private fun observeHouseData(houseId: Int) {
         cancelHouseObservations()
-        val membersJob = viewModelScope.launch { repository.getHouseMembers(houseId).collectLatest { state = state.copy(members = it) } }
-        val cleaningJob = viewModelScope.launch { repository.getWeeklyCleaningRotation(houseId).collectLatest { state = state.copy(cleaningRotations = it) } }
-        val balanceJob = viewModelScope.launch { repository.getHouseBalances(houseId).collectLatest { state = state.copy(balances = it) } }
 
-        // Ascoltiamo il nuovo flusso accoppiato spese + quote di divisione
+        // 1. MEMBRI - Scavalcamento DB Vecchio
+        val membersJob = viewModelScope.launch {
+            repository.getHouseMembers(houseId).collectLatest { listaMembri ->
+                val realMembers = listaMembri.map { member ->
+                    val realUser = repository.getRealUser(member.userUid)
+                    if (realUser != null) {
+                        member.copy(
+                            username = realUser.username,
+                            profilePictureUri = realUser.profilePictureUri
+                        )
+                    } else member
+                }
+
+                val mioProfilo = realMembers.find { it.userUid == currentUserId }
+                state = state.copy(
+                    members = realMembers,
+                    currentUsername = mioProfilo?.username ?: state.currentUsername,
+                    currentUserAvatar = mioProfilo?.profilePictureUri ?: state.currentUserAvatar
+                )
+            }
+        }
+
+        // 2. TURNI PULIZIA - Scavalcamento DB Vecchio
+        val cleaningJob = viewModelScope.launch {
+            repository.getWeeklyCleaningRotation(houseId).collectLatest { rotations ->
+                val realRotations = rotations.map { rot ->
+                    val realUser = repository.getRealUser(rot.assigneeUid)
+                    if (realUser != null) rot.copy(assigneeName = realUser.username) else rot
+                }
+                state = state.copy(cleaningRotations = realRotations)
+            }
+        }
+
+        // 3. BILANCI - Scavalcamento DB Vecchio
+        val balanceJob = viewModelScope.launch {
+            repository.getHouseBalances(houseId).collectLatest { balances ->
+                val realBalances = balances.map { bal ->
+                    val realUser = repository.getRealUser(bal.userUid)
+                    if (realUser != null) bal.copy(username = realUser.username) else bal
+                }
+                state = state.copy(balances = realBalances)
+            }
+        }
+
+        // 4. TRANSAZIONI E QUOTE - Scavalcamento DB Vecchio
         val transactionsJob = viewModelScope.launch {
-            repository.getGroupTransactionsWithSplits(houseId).collectLatest { state = state.copy(transactionsWithSplits = it) }
+            repository.getGroupTransactionsWithSplits(houseId).collectLatest { txList ->
+                val realTxList = txList.map { item ->
+                    val realPayer = repository.getRealUser(item.transaction.payerUid)
+                    val updatedTx = if (realPayer != null) item.transaction.copy(payerUsername = realPayer.username) else item.transaction
+
+                    val updatedSplits = item.splits.map { split ->
+                        val realSplitter = repository.getRealUser(split.userUid)
+                        if (realSplitter != null) split.copy(username = realSplitter.username) else split
+                    }
+                    item.copy(transaction = updatedTx, splits = updatedSplits)
+                }
+                state = state.copy(transactionsWithSplits = realTxList)
+            }
         }
 
         houseDataJobs = listOf(membersJob, cleaningJob, balanceJob, transactionsJob)
@@ -147,7 +218,8 @@ class UniHomeViewModel @Inject constructor(
             UniHomeAction.OnCreateHouseClicked -> {
                 if (state.newHouseName.isNotBlank()) {
                     viewModelScope.launch {
-                        repository.createHouse(state.newHouseName, currentUserId, currentUsername)
+                        val creatorName = state.currentUsername.ifBlank { "Tu" }
+                        repository.createHouse(state.newHouseName, currentUserId, creatorName, state.currentUserAvatar)
                         state = state.copy(newHouseName = "")
                     }
                 }
@@ -179,12 +251,12 @@ class UniHomeViewModel @Inject constructor(
             is UniHomeAction.OnSelectUserToInvite -> {
                 val houseId = state.houseId ?: return
                 viewModelScope.launch {
-                    repository.sendInvitation(houseId, state.houseName, currentUsername, action.user.uid)
+                    repository.sendInvitation(houseId, state.houseName, state.currentUsername, action.user.uid)
                     state = state.copy(inviteUserQuery = "", searchedUsers = emptyList(), snackbarMessage = "Invito inviato a ${action.user.username}!", isSuccessSnackbar = true)
                 }
             }
             UniHomeAction.OnDismissSnackbar -> state = state.copy(snackbarMessage = null)
-            is UniHomeAction.OnAcceptInvitation -> viewModelScope.launch { repository.acceptInvitation(action.invitation, currentUsername, currentUserAvatar) }
+            is UniHomeAction.OnAcceptInvitation -> viewModelScope.launch { repository.acceptInvitation(action.invitation, state.currentUsername, state.currentUserAvatar) }
             is UniHomeAction.OnDeclineInvitation -> viewModelScope.launch { repository.declineInvitation(action.invitationId) }
 
             is UniHomeAction.OnRemoveMember -> {
@@ -204,7 +276,7 @@ class UniHomeViewModel @Inject constructor(
                 val myBalance = state.balances.find { it.userUid == currentUserId }?.netAmount ?: 0.0
                 viewModelScope.launch {
                     if (Math.abs(myBalance) < 0.01) {
-                        repository.removeMemberFromHouse(houseId, currentUserId, currentUsername)
+                        repository.removeMemberFromHouse(houseId, currentUserId, state.currentUsername)
                         state = state.copy(snackbarMessage = "Sei uscito dalla casa.", isSuccessSnackbar = true)
                     } else {
                         state = state.copy(snackbarMessage = "Non puoi uscire dalla casa se il tuo bilancio non è in pari (0.00€)!", isSuccessSnackbar = false)
@@ -222,6 +294,14 @@ class UniHomeViewModel @Inject constructor(
                 }
             }
             is UniHomeAction.OnDeleteServiceClicked -> viewModelScope.launch { repository.deleteCleaningService(action.serviceId) }
+
+            is UniHomeAction.OnToggleServiceCompleted -> {
+                viewModelScope.launch {
+                    repository.toggleCleaningServiceCompletion(action.serviceId)
+                    state = state.copy(snackbarMessage = "Stato della pulizia aggiornato.", isSuccessSnackbar = true)
+                }
+            }
+
             is UniHomeAction.OnNewExpenseTitleChanged -> state = state.copy(newExpenseTitle = action.title)
             is UniHomeAction.OnNewExpenseAmountChanged -> state = state.copy(newExpenseAmount = action.amount)
             is UniHomeAction.OnAddExpenseClicked -> {
@@ -233,7 +313,7 @@ class UniHomeViewModel @Inject constructor(
                         val splits = action.selectedSplitMembers.map { member ->
                             TransactionSplitEntity(transactionId = 0, userUid = member.userUid, username = member.username, amountOwed = dividedAmount)
                         }
-                        repository.addGroupExpense(houseId, state.newExpenseTitle, totalAmount, currentUserId, currentUsername, splits)
+                        repository.addGroupExpense(houseId, state.newExpenseTitle, totalAmount, currentUserId, state.currentUsername, splits)
                         state = state.copy(newExpenseTitle = "", newExpenseAmount = "", isSuccessSnackbar = true)
                     }
                 }
@@ -246,10 +326,10 @@ class UniHomeViewModel @Inject constructor(
                     )
                     repository.addGroupExpense(
                         houseId = houseId,
-                        title = "Saldatura: $currentUsername ➔ ${action.targetUsername}",
+                        title = "Saldatura: ${state.currentUsername} ➔ ${action.targetUsername}",
                         totalAmount = action.amount,
                         payerUid = currentUserId,
-                        payerUsername = currentUsername,
+                        payerUsername = state.currentUsername,
                         splits = singleSplit
                     )
                     state = state.copy(snackbarMessage = "Debito saldato correttamente con ${action.targetUsername}!", isSuccessSnackbar = true)
