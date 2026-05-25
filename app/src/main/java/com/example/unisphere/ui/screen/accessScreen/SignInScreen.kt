@@ -9,6 +9,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,8 +19,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +40,10 @@ fun SignInScreen(
 ) {
     val state = viewModel.state
     val scrollState = rememberScrollState()
+
+    // STATI LOCALI: Gestiscono la visibilità delle icone occhio in modo indipendente
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isConfirmPasswordVisible by remember { mutableStateOf(false) }
 
     val openImagePicker = rememberImagePicker { uri ->
         viewModel.onAction(SignInAction.OnImageSelected(uri))
@@ -94,7 +102,8 @@ fun SignInScreen(
             label = "Nome",
             leadingIcon = Icons.Outlined.Person,
             modifier = Modifier.fillMaxWidth(),
-            isError = state.isError
+            isError = state.isError,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -105,7 +114,8 @@ fun SignInScreen(
             label = "Cognome",
             leadingIcon = Icons.Outlined.Person,
             modifier = Modifier.fillMaxWidth(),
-            isError = state.isError
+            isError = state.isError,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -116,7 +126,8 @@ fun SignInScreen(
             label = "Username",
             leadingIcon = Icons.Outlined.Badge,
             modifier = Modifier.fillMaxWidth(),
-            isError = state.isError
+            isError = state.isError,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -126,22 +137,49 @@ fun SignInScreen(
             onValueChange = { viewModel.onAction(SignInAction.OnEmailChanged(it)) },
             label = "Email",
             leadingIcon = Icons.Outlined.Email,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth(),
             isError = state.isError
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // PRIMO CAMPO PASSWORD
         UniSphereTextField(
             value = state.password,
             onValueChange = { viewModel.onAction(SignInAction.OnPasswordChanged(it)) },
             label = "Password",
             leadingIcon = Icons.Outlined.Lock,
-            visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
             modifier = Modifier.fillMaxWidth(),
-            isError = state.isError
+            isError = state.isError,
+            trailingIcon = {
+                val image = if (isPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                    Icon(imageVector = image, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+                }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // NUOVO: SECONDO CAMPO CONFERMA PASSWORD
+        UniSphereTextField(
+            value = state.confirmPassword,
+            onValueChange = { viewModel.onAction(SignInAction.OnConfirmPasswordChanged(it)) },
+            label = "Conferma Password",
+            leadingIcon = Icons.Outlined.Lock,
+            visualTransformation = if (isConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            modifier = Modifier.fillMaxWidth(),
+            isError = state.isError,
+            trailingIcon = {
+                val image = if (isConfirmPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                IconButton(onClick = { isConfirmPasswordVisible = !isConfirmPasswordVisible }) {
+                    Icon(imageVector = image, contentDescription = null, tint = MaterialTheme.colorScheme.outline)
+                }
+            }
         )
 
         if (state.isError) {
@@ -155,11 +193,12 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // REFACTOR COMPLETATO: Sostituito il vecchio blocco Button/CircularProgressIndicator con UniSphereButton
         UniSphereButton(
             text = "Crea Account",
             isLoading = state.isLoading,
             modifier = Modifier.fillMaxWidth(),
+            // Il bottone si blocca se le password inserite non sono identiche
+            enabled = state.password.isNotBlank() && state.confirmPassword.isNotBlank() && state.password == state.confirmPassword,
             onClick = {
                 viewModel.onAction(SignInAction.OnCreateAccountClicked) {
                     navController.navigate(NavigationRoute.Homescreen) {

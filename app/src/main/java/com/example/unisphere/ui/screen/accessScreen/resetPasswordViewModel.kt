@@ -13,6 +13,7 @@ import javax.inject.Inject
 
 data class ResetPasswordState(
     val newPasswordCode: String = "",
+    val confirmPasswordCode: String = "", // AGGIUNTO: Campo di sdoppiamento controllo
     val isLoading: Boolean = false,
     val isError: Boolean = false,
     val errorMessage: String? = null,
@@ -25,15 +26,39 @@ class ResetPasswordViewModel @Inject constructor() : ViewModel() {
     var state by mutableStateOf(ResetPasswordState())
         private set
 
-    // Regex per il requisiti della password
     private val passwordRegex = "^(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
 
     fun onPasswordChanged(value: String) {
         state = state.copy(newPasswordCode = value, isError = false)
+        checkPasswordsMatch()
     }
 
-    // Valida i criteri di sicurezza
+    // AGGIUNTO: Listener per i cambiamenti del secondo campo di input
+    fun onConfirmPasswordChanged(value: String) {
+        state = state.copy(confirmPasswordCode = value, isError = false)
+        checkPasswordsMatch()
+    }
+
+    // Controllo automatico asincrono sulla corrispondenza delle password digitate
+    private fun checkPasswordsMatch() {
+        if (state.confirmPasswordCode.isNotBlank() && state.newPasswordCode != state.confirmPasswordCode) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "Le password inserite non corrispondono."
+            )
+        }
+    }
+
     fun finalizePasswordReset(onSuccess: () -> Unit) {
+        // Verifica di sicurezza prima della chiamata di rete
+        if (state.newPasswordCode != state.confirmPasswordCode) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "Le password inserite non corrispondono."
+            )
+            return
+        }
+
         if (!state.newPasswordCode.matches(passwordRegex)) {
             state = state.copy(
                 isError = true,
@@ -48,7 +73,6 @@ class ResetPasswordViewModel @Inject constructor() : ViewModel() {
 
         viewModelScope.launch {
             try {
-                // Aggiorna sul server di Supabase la password
                 SupabaseClient.client.auth.updateUser {
                     password = state.newPasswordCode
                 }

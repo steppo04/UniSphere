@@ -8,6 +8,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
@@ -20,6 +22,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -38,6 +41,9 @@ fun LoginScreen(
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+
+    // STATO LOCALE: Gestisce la visibilità della password (occhio aperto/chiuso)
+    var isPasswordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.successMessage) {
         state.successMessage?.let { msg ->
@@ -112,16 +118,26 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Campo Password Globale
+            // Campo Password Globale con Icona Occhio per Visibilità
             UniSphereTextField(
                 value = state.password,
                 onValueChange = { viewModel.onAction(LoginAction.OnPasswordChanged(it)) },
                 label = "Password",
                 leadingIcon = Icons.Outlined.Lock,
-                visualTransformation = PasswordVisualTransformation(),
+                // MODIFICATO: La trasformazione dipende dallo stato locale isPasswordVisible
+                visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
-                isError = state.isError
+                isError = state.isError,
+                // AGGIUNTO: TrailingIcon con logica di toggle per la visibilità
+                trailingIcon = {
+                    val image = if (isPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
+                    val description = if (isPasswordVisible) "Nascondi password" else "Mostra password"
+
+                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                        Icon(imageVector = image, contentDescription = description, tint = MaterialTheme.colorScheme.outline)
+                    }
+                }
             )
 
             TextButton(
@@ -148,7 +164,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-             UniSphereButton(
+            UniSphereButton(
                 text = "Accedi",
                 isLoading = state.isLoading,
                 modifier = Modifier.fillMaxWidth(),
