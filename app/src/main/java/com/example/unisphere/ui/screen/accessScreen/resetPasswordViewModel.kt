@@ -13,7 +13,8 @@ import javax.inject.Inject
 
 data class ResetPasswordState(
     val newPasswordCode: String = "",
-    val confirmPasswordCode: String = "", // AGGIUNTO: Campo di sdoppiamento controllo
+    val confirmPasswordCode: String = "",
+    val isButtonEnabled: Boolean = false,
     val isLoading: Boolean = false,
     val isError: Boolean = false,
     val errorMessage: String? = null,
@@ -29,41 +30,55 @@ class ResetPasswordViewModel @Inject constructor() : ViewModel() {
     private val passwordRegex = "^(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
 
     fun onPasswordChanged(value: String) {
-        state = state.copy(newPasswordCode = value, isError = false)
-        checkPasswordsMatch()
+        state = state.copy(newPasswordCode = value)
+        validateFormState()
     }
 
-    // AGGIUNTO: Listener per i cambiamenti del secondo campo di input
     fun onConfirmPasswordChanged(value: String) {
-        state = state.copy(confirmPasswordCode = value, isError = false)
-        checkPasswordsMatch()
+        state = state.copy(confirmPasswordCode = value)
+        validateFormState()
     }
 
-    // Controllo automatico asincrono sulla corrispondenza delle password digitate
-    private fun checkPasswordsMatch() {
-        if (state.confirmPasswordCode.isNotBlank() && state.newPasswordCode != state.confirmPasswordCode) {
-            state = state.copy(
-                isError = true,
-                errorMessage = "Le password inserite non corrispondono."
-            )
-        }
-    }
+    private fun validateFormState() {
+        val pass = state.newPasswordCode
+        val confirmPass = state.confirmPasswordCode
 
-    fun finalizePasswordReset(onSuccess: () -> Unit) {
-        // Verifica di sicurezza prima della chiamata di rete
-        if (state.newPasswordCode != state.confirmPasswordCode) {
+        val passwordsDoNotMatch = confirmPass.isNotBlank() &&
+                confirmPass.length >= pass.length &&
+                pass != confirmPass
+
+        if (passwordsDoNotMatch) {
             state = state.copy(
                 isError = true,
-                errorMessage = "Le password inserite non corrispondono."
+                errorMessage = "Le password inserite non corrispondono.",
+                isButtonEnabled = false
             )
             return
         }
 
-        if (!state.newPasswordCode.matches(passwordRegex)) {
+        val isRegexValid = pass.matches(passwordRegex)
+
+        if (pass.isNotBlank() && confirmPass.isNotBlank() && !isRegexValid) {
             state = state.copy(
                 isError = true,
-                errorMessage = "La password deve contenere almeno 8 caratteri, una lettera maiuscola e un numero."
+                errorMessage = "La password deve contenere almeno 8 caratteri, una lettera maiuscola e un numero.",
+                isButtonEnabled = false
             )
+            return
+        }
+
+        val shouldEnableButton = isRegexValid && pass == confirmPass
+
+        state = state.copy(
+            isError = false,
+            errorMessage = null,
+            isButtonEnabled = shouldEnableButton
+        )
+    }
+
+    fun finalizePasswordReset(onSuccess: () -> Unit) {
+        if (state.newPasswordCode != state.confirmPasswordCode || !state.newPasswordCode.matches(passwordRegex)) {
+            state = state.copy(isError = true, errorMessage = "Dati non validi.", isButtonEnabled = false)
             return
         }
 
@@ -79,10 +94,20 @@ class ResetPasswordViewModel @Inject constructor() : ViewModel() {
                 state = state.copy(isLoading = false, isSuccess = true)
                 onSuccess()
             } catch (e: Exception) {
+                val rawMessage = e.localizedMessage ?: ""
+
+                val translatedErrorMessage = when {
+                    rawMessage.contains("different", ignoreCase = true) && rawMessage.contains("old", ignoreCase = true) -> {
+                        "La nuova password deve essere diversa da quella precedente."
+                    }
+                    else -> rawMessage.ifBlank { "Impossibile aggiornare la password." }
+                }
+
                 state = state.copy(
                     isLoading = false,
                     isError = true,
-                    errorMessage = e.localizedMessage ?: "Impossibile aggiornare la password."
+                    errorMessage = translatedErrorMessage,
+                    isButtonEnabled = true
                 )
             }
         }

@@ -61,10 +61,9 @@ fun FavoriteRecipesScreen(
                 }
             }
         } else {
-            // ORA LA GRIGLIA GESTISCE LO SCROLLING IN MODO FLUIDO E PROFESSIONALE
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(), // Rimosso il padding clippante da qui
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 12.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp,

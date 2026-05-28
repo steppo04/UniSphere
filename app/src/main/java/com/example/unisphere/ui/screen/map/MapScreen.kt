@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Place
@@ -58,7 +59,6 @@ fun MapScreen(
 ) {
     val state = viewModel.state
     val context = LocalContext.current
-
     var poiToDelete by remember { mutableStateOf<PointOfInterestEntity?>(null) }
 
     Configuration.getInstance().userAgentValue = context.packageName
@@ -92,6 +92,7 @@ fun MapScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
         ) {
+            // Contenitore Box isolato per la mappa OSM
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -112,25 +113,9 @@ fun MapScreen(
                     },
                     modifier = Modifier.fillMaxSize(),
                     update = { mapView ->
-                        mapView.overlays.clear()
-
-                        state.pois.forEach { poi ->
-                            val marker = Marker(mapView)
-                            marker.position = GeoPoint(poi.latitude, poi.longitude)
-                            marker.title = poi.name
-                            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            marker.setOnMarkerClickListener { _, _ ->
-                                viewModel.onAction(MapAction.OnPoiSelected(poi))
-                                true
-                            }
-                            mapView.overlays.add(marker)
+                        updateMapMarkers(mapView, state.pois, state.selectedPoi) { poi ->
+                            viewModel.onAction(MapAction.OnPoiSelected(poi))
                         }
-
-                        state.selectedPoi?.let { selected ->
-                            mapView.controller.animateTo(GeoPoint(selected.latitude, selected.longitude))
-                        }
-
-                        mapView.invalidate()
                     }
                 )
 
@@ -163,7 +148,6 @@ fun MapScreen(
                 UniSphereSectionHeader(title = "I tuoi luoghi salvati")
 
                 if (state.pois.isEmpty()) {
-                    // FIX: Wrapper scrollabile indipendente per permettere la lettura dell'Empty State su schermi compatti
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -174,7 +158,7 @@ fun MapScreen(
                             icon = Icons.Default.Map,
                             title = "Nessun luogo salvato",
                             description = "La tua mappa è un foglio bianco. Aggiungi i tuoi punti di interesse importanti (es. aule, mense o biblioteche) per trovarli subito!",
-                            modifier = Modifier.padding(vertical = 16.dp) // Rimosso il weight e aggiunto padding per respirare
+                            modifier = Modifier.padding(vertical = 16.dp)
                         )
                     }
                 } else {
@@ -230,6 +214,7 @@ fun MapScreen(
     }
 }
 
+// Elemento singolo della lista luoghi
 @Composable
 fun PoiListItem(poi: PointOfInterestEntity, onClick: () -> Unit, onDelete: () -> Unit) {
     Card(
@@ -256,7 +241,33 @@ fun PoiListItem(poi: PointOfInterestEntity, onClick: () -> Unit, onDelete: () ->
         )
     }
 }
+private fun updateMapMarkers(
+    mapView: MapView,
+    pois: List<PointOfInterestEntity>,
+    selectedPoi: PointOfInterestEntity?,
+    onPoiSelected: (PointOfInterestEntity) -> Unit
+) {
+    mapView.overlays.clear()
 
+    pois.forEach { poi ->
+        val marker = Marker(mapView)
+        marker.position = GeoPoint(poi.latitude, poi.longitude)
+        marker.title = poi.name
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        marker.setOnMarkerClickListener { _, _ ->
+            onPoiSelected(poi)
+            true
+        }
+        mapView.overlays.add(marker)
+    }
+
+    selectedPoi?.let { selected ->
+        mapView.controller.animateTo(GeoPoint(selected.latitude, selected.longitude))
+    }
+
+    mapView.invalidate()
+}
+// Card fluttuante per visualizzare i dettagli rapidi del POI toccato
 @Composable
 fun PoiSmallCard(poi: PointOfInterestEntity, onClose: () -> Unit, onOpenInMaps: () -> Unit) {
     Card(
@@ -306,6 +317,7 @@ fun PoiSmallCard(poi: PointOfInterestEntity, onClose: () -> Unit, onOpenInMaps: 
     }
 }
 
+// Dialog di immissione dati per un nuovo POI
 @Composable
 fun AddPoiDialog(
     state: MapState,
@@ -314,11 +326,7 @@ fun AddPoiDialog(
     onConfirm: () -> Unit,
     onLocationRequest: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    LaunchedEffect(state.addressSuggestions) {
-        expanded = state.addressSuggestions.isNotEmpty()
-    }
+    val expanded = remember(state.addressSuggestions) { state.addressSuggestions.isNotEmpty() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -328,7 +336,7 @@ fun AddPoiDialog(
 
                 UniSphereTextField(
                     value = state.newPoiName,
-                    onValueChange = { nome -> onAction(MapAction.OnNameChanged(nome)) },
+                    onValueChange = { onAction(MapAction.OnNameChanged(it)) },
                     label = "Nome del luogo (es. Università)",
                     leadingIcon = Icons.Outlined.Badge,
                     modifier = Modifier.fillMaxWidth()
@@ -337,10 +345,7 @@ fun AddPoiDialog(
                 Box(modifier = Modifier.fillMaxWidth()) {
                     UniSphereTextField(
                         value = state.newPoiAddress,
-                        onValueChange = { indirizzo ->
-                            onAction(MapAction.OnAddressChanged(indirizzo))
-                            expanded = indirizzo.length >= 3
-                        },
+                        onValueChange = { onAction(MapAction.OnAddressChanged(it)) },
                         label = "Indirizzo / Via",
                         leadingIcon = Icons.Outlined.Place,
                         modifier = Modifier.fillMaxWidth(),
@@ -357,17 +362,14 @@ fun AddPoiDialog(
 
                     DropdownMenu(
                         expanded = expanded,
-                        onDismissRequest = { expanded = false },
+                        onDismissRequest = { onAction(MapAction.OnAddressChanged(state.newPoiAddress)) },
                         modifier = Modifier.fillMaxWidth(0.9f),
                         properties = PopupProperties(focusable = false)
                     ) {
                         state.addressSuggestions.forEach { suggestion ->
                             DropdownMenuItem(
                                 text = { Text(suggestion, fontSize = 14.sp) },
-                                onClick = {
-                                    onAction(MapAction.OnSuggestionSelected(suggestion))
-                                    expanded = false
-                                }
+                                onClick = { onAction(MapAction.OnSuggestionSelected(suggestion)) }
                             )
                         }
                     }
@@ -375,7 +377,7 @@ fun AddPoiDialog(
 
                 UniSphereTextField(
                     value = state.newPoiNotes,
-                    onValueChange = { note -> onAction(MapAction.OnNotesChanged(note)) },
+                    onValueChange = { onAction(MapAction.OnNotesChanged(it)) },
                     label = "Note aggiuntive (opzionale)",
                     leadingIcon = null,
                     singleLine = false,

@@ -28,7 +28,6 @@ import java.time.LocalTime
 import java.util.Locale
 import javax.inject.Inject
 
-// --- STATO AGGIORNATO (Dinamico) ---
 data class AddCalendarEventState(
     val title: String = "",
     val location: String = "",
@@ -36,11 +35,11 @@ data class AddCalendarEventState(
     val selectedDate: LocalDate = LocalDate.now(),
     val selectedStartTime: LocalTime = LocalTime.of(9, 0),
     val selectedEndTime: LocalTime = LocalTime.of(10, 0),
-
-    // Gestione calendari dinamici dal DB
+    val isButtonEnabled: Boolean = false,
+    val isTimeError: Boolean = false,
+    val timeErrorMessage: String? = null,
     val selectedCalendarId: Int = 0,
     val calendarTypes: List<CalendarTypeEntity> = emptyList(),
-
     val isTypeExpanded: Boolean = false,
     val showDatePicker: Boolean = false,
     val showStartTimePicker: Boolean = false,
@@ -51,7 +50,6 @@ data class AddCalendarEventState(
     val isSearchingSuggestions: Boolean = false
 )
 
-// --- AZIONI AGGIORNATE ---
 sealed interface AddCalendarEventAction {
     data class OnTitleChanged(val value: String) : AddCalendarEventAction
     data class OnLocationChanged(val value: String) : AddCalendarEventAction
@@ -65,13 +63,10 @@ sealed interface AddCalendarEventAction {
     data class ToggleStartTimePicker(val show: Boolean) : AddCalendarEventAction
     data class ToggleEndTimePicker(val show: Boolean) : AddCalendarEventAction
     data class ToggleLocationExpanded(val expanded: Boolean) : AddCalendarEventAction
-
-    // Nuove azioni per gestire i tipi di calendario al volo
     data class OnCreateCalendarType(val name: String, val colorHex: String) : AddCalendarEventAction
     data class OnDeleteCalendarType(val calendar: CalendarTypeEntity) : AddCalendarEventAction
-
-    data object OnSaveClicked : AddCalendarEventAction
     data object OnGetCurrentLocation : AddCalendarEventAction
+    data object OnSaveClicked : AddCalendarEventAction
 }
 
 @HiltViewModel
@@ -90,76 +85,98 @@ class AddCalendarEventViewModel @Inject constructor(
         loadUserCalendars()
     }
 
+    // Carica le categorie di calendario associate all'account
     private fun loadUserCalendars() {
         viewModelScope.launch {
             val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
-            // Ascoltiamo i calendari dell'utente in tempo reale
             eventRepository.getCalendarsForUser(uid).collectLatest { calendars ->
                 state = state.copy(
                     calendarTypes = calendars,
-                    // Se il calendario precedentemente selezionato non esiste più o è 0, prendiamo il primo
                     selectedCalendarId = if (state.selectedCalendarId == 0 || calendars.none { it.id == state.selectedCalendarId }) {
                         calendars.firstOrNull()?.id ?: 0
                     } else {
                         state.selectedCalendarId
                     }
                 )
+                validateFormState()
             }
         }
     }
 
     fun onAction(action: AddCalendarEventAction, onBack: () -> Unit = {}) {
         when (action) {
-            is AddCalendarEventAction.OnTitleChanged -> state = state.copy(title = action.value)
+            is AddCalendarEventAction.OnTitleChanged -> {
+                state = state.copy(title = action.value)
+                validateFormState()
+            }
             is AddCalendarEventAction.OnLocationChanged -> {
                 state = state.copy(location = action.value, isLocationExpanded = true)
                 fetchLocationSuggestions(action.value)
+                validateFormState()
             }
             is AddCalendarEventAction.OnDescriptionChanged -> state = state.copy(description = action.value)
-            is AddCalendarEventAction.OnCalendarChanged -> state = state.copy(selectedCalendarId = action.value, isTypeExpanded = false)
-            is AddCalendarEventAction.OnDateChanged -> state = state.copy(selectedDate = action.value, showDatePicker = false)
-            is AddCalendarEventAction.OnStartTimeChanged -> state = state.copy(selectedStartTime = action.value, showStartTimePicker = false)
+            is AddCalendarEventAction.OnCalendarChanged -> {
+                state = state.copy(selectedCalendarId = action.value, isTypeExpanded = false)
+                validateFormState()
+            }
+            is AddCalendarEventAction.OnDateChanged -> {
+                state = state.copy(selectedDate = action.value, showDatePicker = false)
+                validateFormState()
+            }
+            is AddCalendarEventAction.OnStartTimeChanged -> {
+                state = state.copy(selectedStartTime = action.value, showStartTimePicker = false)
+                validateFormState()
+            }
             is AddCalendarEventAction.ToggleStartTimePicker -> state = state.copy(showStartTimePicker = action.show)
-            is AddCalendarEventAction.OnEndTimeChanged -> state = state.copy(selectedEndTime = action.value, showEndTimePicker = false)
+            is AddCalendarEventAction.OnEndTimeChanged -> {
+                state = state.copy(selectedEndTime = action.value, showEndTimePicker = false)
+                validateFormState()
+            }
             is AddCalendarEventAction.ToggleEndTimePicker -> state = state.copy(showEndTimePicker = action.show)
             is AddCalendarEventAction.ToggleTypeExpanded -> state = state.copy(isTypeExpanded = action.expanded)
             is AddCalendarEventAction.ToggleLocationExpanded -> state = state.copy(isLocationExpanded = action.expanded)
             is AddCalendarEventAction.ToggleDatePicker -> state = state.copy(showDatePicker = action.show)
-
-            // Gestione dei metodi di aggiunta ed eliminazione dei calendari
             is AddCalendarEventAction.OnCreateCalendarType -> createCalendarType(action.name, action.colorHex)
             is AddCalendarEventAction.OnDeleteCalendarType -> deleteCalendarType(action.calendar)
-
             AddCalendarEventAction.OnGetCurrentLocation -> getCurrentLocation()
             AddCalendarEventAction.OnSaveClicked -> saveEventToRoom(onBack)
         }
     }
 
+    // Esegue i controlli di integrità oraria ed abilitazione form
+    private fun validateFormState() {
+        val isTimeInvalid = state.selectedEndTime.isBefore(state.selectedStartTime)
+
+        state = state.copy(
+            isTimeError = isTimeInvalid,
+            timeErrorMessage = if (isTimeInvalid) "L'orario di fine non può antecedere quello d'inizio." else null,
+            isButtonEnabled = state.title.isNotBlank() && state.selectedCalendarId != 0 && !isTimeInvalid
+        )
+    }
+
+    // Inserisce una nuova categoria di calendario nel database
     private fun createCalendarType(name: String, colorHex: String) {
         if (name.isBlank()) return
         viewModelScope.launch {
             val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
-            val newCalendar = CalendarTypeEntity(
-                name = name,
-                color = colorHex,
-                userId = uid
-            )
+            val newCalendar = CalendarTypeEntity(name = name, color = colorHex, userId = uid)
             eventRepository.saveCalendar(newCalendar)
         }
     }
 
+    // Rimuove una categoria di calendario dal database
     private fun deleteCalendarType(calendar: CalendarTypeEntity) {
         viewModelScope.launch {
             eventRepository.deleteCalendar(calendar)
         }
     }
 
-    private fun saveEventToRoom(onSuccess: () -> Unit) {
-        if (state.title.isBlank() || state.selectedCalendarId == 0) return
+    // Salva il nuovo evento all'interno del database
+    fun saveEventToRoom(onSuccess: () -> Unit) {
+        if (!state.isButtonEnabled) return
 
         viewModelScope.launch {
             val uid = SupabaseClient.client.auth.currentUserOrNull()?.id
-
             if (uid != null) {
                 val nuovoEvento = EventEntity(
                     userUid = uid,
@@ -169,16 +186,15 @@ class AddCalendarEventViewModel @Inject constructor(
                     date = state.selectedDate,
                     startTime = state.selectedStartTime,
                     endTime = state.selectedEndTime,
-                    calendar = state.selectedCalendarId // ID salvato correttamente
+                    calendar = state.selectedCalendarId
                 )
-
                 eventRepository.saveEvent(nuovoEvento)
                 onSuccess()
             }
         }
     }
 
-    // --- LOGICA GPS & GEOCODER ---
+    // Recupera la posizione geografica corrente tramite FusedLocationProvider
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation() {
         viewModelScope.launch {
@@ -187,13 +203,17 @@ class AddCalendarEventViewModel @Inject constructor(
                 val result = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
                 result?.let { location ->
                     val addressName = getAddressFromLocation(location.latitude, location.longitude)
-                    if (addressName != null) state = state.copy(location = addressName)
+                    if (addressName != null) {
+                        state = state.copy(location = addressName)
+                        validateFormState()
+                    }
                 }
             } catch (e: Exception) { e.printStackTrace() }
             finally { state = state.copy(isLoadingLocation = false) }
         }
     }
 
+    // Esegue l'autocompletamento del testo per gli indirizzi tramite Geocoder
     private fun fetchLocationSuggestions(query: String) {
         if (query.length < 3) {
             state = state.copy(locationSuggestions = emptyList())
@@ -216,6 +236,7 @@ class AddCalendarEventViewModel @Inject constructor(
         }
     }
 
+    // Converte lat/lng in una stringa testuale leggibile
     private suspend fun getAddressFromLocation(latitude: Double, longitude: Double): String? {
         val geocoder = Geocoder(getApplication(), Locale.getDefault())
         return try {

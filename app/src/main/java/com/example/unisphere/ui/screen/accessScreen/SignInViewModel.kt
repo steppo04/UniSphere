@@ -20,7 +20,8 @@ data class SignInState(
     val username: String = "",
     val email: String = "",
     val password: String = "",
-    val confirmPassword: String = "", // AGGIUNTO: Campo di sdoppiamento per controllo di uguaglianza
+    val confirmPassword: String = "",
+    val isButtonEnabled: Boolean = false,
     val profilePictureUri: String? = null,
     val theme: String = "Default",
     val isError: Boolean = false,
@@ -34,7 +35,7 @@ sealed interface SignInAction {
     data class OnUsernameChanged(val value: String) : SignInAction
     data class OnEmailChanged(val value: String) : SignInAction
     data class OnPasswordChanged(val value: String) : SignInAction
-    data class OnConfirmPasswordChanged(val value: String) : SignInAction // AGGIUNTO: Azione di ascolto per la conferma
+    data class OnConfirmPasswordChanged(val value: String) : SignInAction
     data class OnImageSelected(val uri: Uri?) : SignInAction
     data object OnCreateAccountClicked : SignInAction
 }
@@ -47,52 +48,101 @@ class SignInViewModel @Inject constructor(
     var state by mutableStateOf(SignInState())
         private set
 
+    private val passwordRegex = "^(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
+
     fun onAction(action: SignInAction, onSuccess: () -> Unit = {}) {
         when (action) {
-            is SignInAction.OnNameChanged -> state = state.copy(name = action.value, isError = false)
-            is SignInAction.OnSurnameChanged -> state = state.copy(surname = action.value, isError = false)
-            is SignInAction.OnUsernameChanged -> state = state.copy(username = action.value, isError = false)
-            is SignInAction.OnEmailChanged -> state = state.copy(email = action.value, isError = false)
+            is SignInAction.OnNameChanged -> {
+                state = state.copy(name = action.value)
+                validateFormState()
+            }
+            is SignInAction.OnSurnameChanged -> {
+                state = state.copy(surname = action.value)
+                validateFormState()
+            }
+            is SignInAction.OnUsernameChanged -> {
+                state = state.copy(username = action.value)
+                validateFormState()
+            }
+            is SignInAction.OnEmailChanged -> {
+                state = state.copy(email = action.value)
+                validateFormState()
+            }
             is SignInAction.OnPasswordChanged -> {
-                state = state.copy(password = action.value, isError = false)
-                checkPasswordsMatch()
+                state = state.copy(password = action.value)
+                validateFormState()
             }
             is SignInAction.OnConfirmPasswordChanged -> {
-                state = state.copy(confirmPassword = action.value, isError = false)
-                checkPasswordsMatch()
+                state = state.copy(confirmPassword = action.value)
+                validateFormState()
             }
-            is SignInAction.OnImageSelected -> state = state.copy(profilePictureUri = action.uri?.toString())
+            is SignInAction.OnImageSelected -> {
+                state = state.copy(profilePictureUri = action.uri?.toString())
+            }
             is SignInAction.OnCreateAccountClicked -> validateAndCreate(onSuccess)
         }
     }
 
-    // Verifica automatica preliminare sulla congruenza del testo digitato nei due campi
-    private fun checkPasswordsMatch() {
-        if (state.confirmPassword.isNotBlank() && state.password != state.confirmPassword) {
-            state = state.copy(isError = true, errorMessage = "Le password inserite non corrispondono.")
+    private fun validateFormState() {
+        val name = state.name
+        val surname = state.surname
+        val username = state.username
+        val email = state.email
+        val pass = state.password
+        val confirmPass = state.confirmPassword
+
+        val passwordsDoNotMatch = confirmPass.isNotBlank() &&
+                confirmPass.length >= pass.length &&
+                pass != confirmPass
+
+        if (passwordsDoNotMatch) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "Le password inserite non corrispondono.",
+                isButtonEnabled = false
+            )
+            return
         }
+
+        // Controllo Regex sui requisiti della password se entrambi i campi sono compilati
+        val isPasswordRegexValid = pass.matches(passwordRegex)
+        if (pass.isNotBlank() && confirmPass.isNotBlank() && !isPasswordRegexValid) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "La password deve contenere almeno 8 caratteri, una lettera maiuscola e un numero.",
+                isButtonEnabled = false
+            )
+            return
+        }
+
+        //Controllo dell'email
+        val isEmailFormatValid = email.isBlank() || (email.contains("@") && email.contains("."))
+        if (!isEmailFormatValid) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "Inserisci un indirizzo email valido.",
+                isButtonEnabled = false
+            )
+            return
+        }
+
+        // 4. l'abilitazione del bottone richiede che tutti i campi siano pieni e validi
+        val allFieldsFilled = name.isNotBlank() && surname.isNotBlank() &&
+                username.isNotBlank() && email.isNotBlank() &&
+                pass.isNotBlank() && confirmPass.isNotBlank()
+
+        val shouldEnable = allFieldsFilled && isPasswordRegexValid && pass == confirmPass
+
+        state = state.copy(
+            isError = false,
+            errorMessage = null,
+            isButtonEnabled = shouldEnable
+        )
     }
 
     private fun validateAndCreate(onSuccess: () -> Unit) {
-        if (state.name.isBlank() || state.surname.isBlank() || state.username.isBlank() || state.email.isBlank()) {
-            setError("Tutti i campi sono obbligatori.")
-            return
-        }
-
-        if (!state.email.contains("@") || !state.email.contains(".")) {
-            setError("Inserisci un indirizzo email valido.")
-            return
-        }
-
-        // VERIFICA DI SICUREZZA: Controllo di uguaglianza incrociato
-        if (state.password != state.confirmPassword) {
-            setError("Le password inserite non corrispondono.")
-            return
-        }
-
-        val passwordRegex = "^(?=.*[A-Z])(?=.*\\d).{8,}$".toRegex()
-        if (!state.password.matches(passwordRegex)) {
-            setError("La password deve contenere almeno 8 caratteri, una lettera maiuscola e un numero.")
+        if (state.password != state.confirmPassword || !state.password.matches(passwordRegex)) {
+            state = state.copy(isError = true, errorMessage = "Dati non validi.", isButtonEnabled = false)
             return
         }
 
@@ -141,7 +191,8 @@ class SignInViewModel @Inject constructor(
                 state = state.copy(
                     isLoading = false,
                     isError = true,
-                    errorMessage = e.localizedMessage ?: "Errore durante la registrazione."
+                    errorMessage = e.localizedMessage ?: "Errore durante la registrazione.",
+                    isButtonEnabled = true
                 )
             }
         }
@@ -151,7 +202,8 @@ class SignInViewModel @Inject constructor(
         state = state.copy(
             isError = true,
             isLoading = false,
-            errorMessage = message
+            errorMessage = message,
+            isButtonEnabled = false
         )
     }
 }

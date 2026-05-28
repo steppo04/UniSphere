@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,7 +13,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -33,21 +34,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import com.example.unisphere.db.local.entity.TransactionCategoryEntity
 import com.example.unisphere.db.local.entity.TransactionEntity
 import com.example.unisphere.ui.composables.AppBar
 import com.example.unisphere.ui.composables.BottomNavigationBar
 import com.example.unisphere.ui.composables.UniSphereAlertDialog
-import com.example.unisphere.ui.composables.UniSphereButton
 import com.example.unisphere.ui.composables.UniSphereEmptyState
 import com.example.unisphere.ui.composables.UniSphereListItem
 import com.example.unisphere.ui.composables.UniSphereTextField
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,10 +54,6 @@ fun WalletScreen(
 ) {
     val state = viewModel.state
 
-    val totaleEntrate = state.transactions.filter { it.isIncome }.sumOf { it.amount }
-    val totaleUscite = state.transactions.filter { !it.isIncome }.sumOf { it.amount }
-    val saldoNetto = totaleEntrate - totaleUscite
-
     Scaffold(
         topBar = { AppBar(title = "UniWallet", navController = navController) },
         bottomBar = { BottomNavigationBar(navController = navController) },
@@ -71,9 +63,7 @@ fun WalletScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Aggiungi")
-            }
+            ) { Icon(Icons.Default.Add, contentDescription = "Aggiungi") }
         }
     ) { innerPadding ->
         LazyColumn(
@@ -87,7 +77,7 @@ fun WalletScreen(
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
             item {
-                WalletOverviewHero(saldoNetto = saldoNetto, entrate = totaleEntrate, uscite = totaleUscite)
+                WalletOverviewHero(saldoNetto = state.netBalance, entrate = state.totalIncomes, uscite = state.totalExpenses)
             }
 
             if (state.transactions.isEmpty()) {
@@ -97,12 +87,11 @@ fun WalletScreen(
             } else {
                 item {
                     Text("Riepilogo Spese", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
-                    PieChartSection(state.transactions.filter { !it.isIncome }, state.categories)
+                    PieChartSection(state.pieSlices)
                 }
-
                 item {
                     Text("Andamento Patrimoniale", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp))
-                    LineChartSection(state.transactions)
+                    LineChartSection(state = state, onAction = viewModel::onAction)
                 }
 
                 item {
@@ -124,13 +113,10 @@ fun WalletScreen(
                 }
 
                 if (state.isFilterPanelExpanded) {
-                    item {
-                        SmartFilterPanel(state = state, onAction = viewModel::onAction)
-                    }
+                    item { SmartFilterPanel(state = state, onAction = viewModel::onAction) }
                 }
 
                 val isFilteringActive = state.filterCategoryId != null || state.filterIsIncome != null || state.filterMinAmount.isNotBlank() || state.filterMaxAmount.isNotBlank()
-
                 val transactionsToDisplay = if (state.showAllTransactions || isFilteringActive) {
                     state.filteredTransactions.sortedByDescending { it.date }
                 } else {
@@ -166,18 +152,12 @@ fun WalletScreen(
                     }
                 }
             }
-
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
 
-    if (state.showAddDialog) {
-        AddTransactionDialog(state = state, viewModel = viewModel)
-    }
-
-    if (state.selectedTransaction != null) {
-        TransactionDetailsDialog(state = state, viewModel = viewModel)
-    }
+    if (state.showAddDialog) AddTransactionDialog(state = state, viewModel = viewModel)
+    if (state.selectedTransaction != null) TransactionDetailsDialog(state = state, viewModel = viewModel)
 }
 
 @Composable
@@ -197,9 +177,7 @@ fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 2.dp)
             )
-
             Spacer(modifier = Modifier.height(18.dp))
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFFE8F5E9)).padding(horizontal = 12.dp, vertical = 10.dp),
@@ -212,7 +190,6 @@ fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
                         Text(String.format(java.util.Locale.US, "+%.0f €", entrate), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                     }
                 }
-
                 Row(
                     modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0xFFFFEAEA)).padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -228,7 +205,6 @@ fun WalletOverviewHero(saldoNetto: Double, entrate: Double, uscite: Double) {
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
@@ -238,9 +214,7 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.background).padding(2.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().height(38.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.background).padding(2.dp)) {
                 val selectedType = state.filterIsIncome
                 Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (selectedType == null) MaterialTheme.colorScheme.surface else Color.Transparent).clickable { onAction(WalletAction.OnFilterTypeChanged(null)) }, contentAlignment = Alignment.Center) {
                     Text("Tutte", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (selectedType == null) MaterialTheme.colorScheme.primary else Color.Gray)
@@ -253,21 +227,26 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
                 }
             }
 
-            var menuExpanded by remember { mutableStateOf(false) }
             val currentFilterCat = state.categories.find { it.id == state.filterCategoryId }
-            ExposedDropdownMenuBox(expanded = menuExpanded, onExpandedChange = { menuExpanded = it }) {
+            ExposedDropdownMenuBox(
+                expanded = state.isFilterCategoryDropdownExpanded,
+                onExpandedChange = { onAction(WalletAction.ToggleFilterCategoryDropdown(it)) }
+            ) {
                 UniSphereTextField(
                     value = currentFilterCat?.name ?: "Tutte le categorie",
                     onValueChange = {},
                     label = "Filtra per Categoria",
                     leadingIcon = Icons.Default.Category,
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded) }
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isFilterCategoryDropdownExpanded) }
                 )
-                ExposedDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(text = { Text("Tutte le categorie", fontWeight = FontWeight.Bold) }, onClick = { onAction(WalletAction.OnFilterCategoryChanged(null)); menuExpanded = false })
+                ExposedDropdownMenu(
+                    expanded = state.isFilterCategoryDropdownExpanded,
+                    onDismissRequest = { onAction(WalletAction.ToggleFilterCategoryDropdown(false)) }
+                ) {
+                    DropdownMenuItem(text = { Text("Tutte le categorie", fontWeight = FontWeight.Bold) }, onClick = { onAction(WalletAction.OnFilterCategoryChanged(null)) })
                     state.categories.forEach { cat ->
-                        DropdownMenuItem(text = { Text(cat.name) }, onClick = { onAction(WalletAction.OnFilterCategoryChanged(cat.id)); menuExpanded = false })
+                        DropdownMenuItem(text = { Text(cat.name) }, onClick = { onAction(WalletAction.OnFilterCategoryChanged(cat.id)) })
                     }
                 }
             }
@@ -291,7 +270,7 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
                 )
             }
 
-            TextButton(onClick = { onAction(WalletAction.OnClearFilters) }, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 8.dp)) {
+            TextButton(onClick = { onAction(WalletAction.OnClearFilters) }, modifier = Modifier.align(Alignment.End)) {
                 Icon(Icons.Default.ClearAll, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Azzera Filtri", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -301,30 +280,7 @@ fun SmartFilterPanel(state: WalletState, onAction: (WalletAction) -> Unit) {
 }
 
 @Composable
-fun LineChartSection(transactions: List<TransactionEntity>) {
-    val sortedTransactions = transactions.sortedBy { it.date }
-    val balanceTimeline = mutableListOf<Triple<LocalDate, Double, Boolean>>()
-    var currentBalance = 0.0
-
-    var tempDate = LocalDate.now().minusDays(30)
-    val endDate = LocalDate.now()
-
-    while (!tempDate.isAfter(endDate)) {
-        val daysTransactions = sortedTransactions.filter { it.date == tempDate }
-        val hasChange = daysTransactions.isNotEmpty()
-        if (hasChange) {
-            currentBalance += daysTransactions.sumOf { if (it.isIncome) it.amount else -it.amount }
-        }
-        balanceTimeline.add(Triple(tempDate, currentBalance, hasChange))
-        tempDate = tempDate.plusDays(1)
-    }
-
-    val maxBalance = balanceTimeline.maxOfOrNull { it.second } ?: 100.0
-    val minBalance = balanceTimeline.minOfOrNull { it.second } ?: 0.0
-    val range = (maxBalance - minBalance).coerceAtLeast(100.0)
-
-    var selectedIndex by remember { mutableStateOf<Int?>(null) }
-
+fun LineChartSection(state: WalletState, onAction: (WalletAction) -> Unit) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val axisColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurface.toArgb()
@@ -336,26 +292,18 @@ fun LineChartSection(transactions: List<TransactionEntity>) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.5.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-            AnimatedContent(
-                targetState = selectedIndex,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "HeaderAnim"
-            ) { targetIndex ->
-                if (targetIndex != null && targetIndex < balanceTimeline.size) {
-                    val infoGiorno = balanceTimeline[targetIndex]
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = infoGiorno.first.format(DateTimeFormatter.ofPattern("dd MMMM yyyy")), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = primaryColor)
-                        Text(text = String.format(java.util.Locale.US, "Saldo: %.2f €", infoGiorno.second), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (infoGiorno.second >= 0) Color(0xFF2E7D32) else Color(0xFFC62828))
+            AnimatedContent(targetState = state.selectedChartIndex, label = "HeaderAnim") { targetIndex ->
+                if (targetIndex != null && targetIndex < state.lineChartPoints.size) {
+                    val infoGiorno = state.lineChartPoints[targetIndex]
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = infoGiorno.date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy")), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = primaryColor)
+                        Text(text = String.format(java.util.Locale.US, "Saldo: %.2f €", infoGiorno.balance), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (infoGiorno.balance >= 0) Color(0xFF2E7D32) else Color(0xFFC62828))
                     }
                 } else {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.TrendingUp, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.TrendingUp, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "Tocca la curva per i dettagli giornalieri", fontSize = 13.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+                        Text("Tocca la curva per i dettagli giornalieri", fontSize = 13.sp, color = Color.Gray)
                     }
                 }
             }
@@ -364,85 +312,66 @@ fun LineChartSection(transactions: List<TransactionEntity>) {
 
             Box(modifier = Modifier.fillMaxWidth().height(180.dp)) {
                 Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .pointerInput(balanceTimeline) {
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp)
+                        .pointerInput(state.lineChartPoints) {
                             detectTapGestures { offset ->
-                                val totalPoints = balanceTimeline.size
+                                val totalPoints = state.lineChartPoints.size
                                 if (totalPoints > 1) {
-                                    val drawingWidth = size.width
-                                    val spacing = drawingWidth / (totalPoints - 1)
+                                    val spacing = size.width / (totalPoints - 1)
                                     val closestIndex = (offset.x / spacing).roundToInt().coerceIn(0, totalPoints - 1)
-                                    selectedIndex = closestIndex
+                                    onAction(WalletAction.OnChartPointSelected(closestIndex))
                                 }
                             }
                         }
                 ) {
                     val width = size.width
                     val height = size.height
-                    val totalPoints = balanceTimeline.size
+                    val totalPoints = state.lineChartPoints.size
                     val spacing = if (totalPoints > 1) width / (totalPoints - 1) else width
 
                     drawLine(color = axisColor, start = Offset(0f, height), end = Offset(width, height), strokeWidth = 1f)
 
-                    val points = balanceTimeline.mapIndexed { index, data ->
-                        val x = index * spacing
-                        val normalizedY = ((data.second - minBalance) / range).toFloat()
-                        val y = height - (normalizedY * height)
-                        Offset(x, y)
+                    val points = state.lineChartPoints.mapIndexed { index, data ->
+                        Offset(index * spacing, height - (((data.balance - state.minTimelineBalance) / state.timelineRange).toFloat() * height))
                     }
 
-                    val strokePath = Path()
-                    val fillPath = Path()
-
                     if (points.isNotEmpty()) {
-                        strokePath.moveTo(points[0].x, points[0].y)
-                        fillPath.moveTo(points[0].x, points[0].y)
+                        val strokePath = Path().apply { moveTo(points[0].x, points[0].y) }
+                        val fillPath = Path().apply { moveTo(points[0].x, points[0].y) }
 
                         for (i in 0 until points.size - 1) {
-                            val p1 = points[i]
-                            val p2 = points[i + 1]
-                            val controlX = p1.x + (p2.x - p1.x) / 2f
-                            strokePath.cubicTo(controlX, p1.y, controlX, p2.y, p2.x, p2.y)
-                            fillPath.cubicTo(controlX, p1.y, controlX, p2.y, p2.x, p2.y)
+                            val controlX = points[i].x + (points[i + 1].x - points[i].x) / 2f
+                            strokePath.cubicTo(controlX, points[i].y, controlX, points[i + 1].y, points[i + 1].x, points[i + 1].y)
+                            fillPath.cubicTo(controlX, points[i].y, controlX, points[i + 1].y, points[i + 1].x, points[i + 1].y)
                         }
-
                         fillPath.lineTo(width, height)
                         fillPath.lineTo(0f, height)
                         fillPath.close()
 
-                        drawPath(path = fillPath, brush = Brush.verticalGradient(colors = listOf(primaryColor.copy(alpha = 0.25f), Color.Transparent), startY = 0f, endY = height))
+                        drawPath(path = fillPath, brush = Brush.verticalGradient(listOf(primaryColor.copy(alpha = 0.25f), Color.Transparent), 0f, height))
                         drawPath(path = strokePath, color = primaryColor, style = Stroke(width = 2.5.dp.toPx()))
 
-                        selectedIndex?.let { index ->
+                        state.selectedChartIndex?.let { index ->
                             if (index < points.size) {
-                                val selectedPoint = points[index]
-                                drawLine(color = primaryColor.copy(alpha = 0.4f), start = Offset(selectedPoint.x, 0f), end = Offset(selectedPoint.x, height), strokeWidth = 1.5.dp.toPx())
-                                drawCircle(color = primaryColor, radius = 6.dp.toPx(), center = selectedPoint)
-                                drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = selectedPoint)
+                                drawLine(primaryColor.copy(alpha = 0.4f), Offset(points[index].x, 0f), Offset(points[index].x, height), 1.5.dp.toPx())
+                                drawCircle(primaryColor, 6.dp.toPx(), points[index])
+                                drawCircle(Color.White, 2.5.dp.toPx(), points[index])
                             }
                         }
-
-                        balanceTimeline.forEachIndexed { index, data ->
-                            if (data.third && index != selectedIndex) {
-                                drawCircle(color = primaryColor.copy(alpha = 0.6f), radius = 2.dp.toPx(), center = points[index])
+                        state.lineChartPoints.forEachIndexed { index, data ->
+                            if (data.hasTransaction && index != state.selectedChartIndex) {
+                                drawCircle(primaryColor.copy(alpha = 0.6f), 2.dp.toPx(), points[index])
                             }
                         }
                     }
 
                     drawContext.canvas.nativeCanvas.apply {
-                        val paint = android.graphics.Paint().apply {
-                            color = labelColor
-                            textSize = 22f
-                            textAlign = android.graphics.Paint.Align.LEFT
-                        }
-                        drawText("${maxBalance.toInt()} €", 0f, -10f, paint)
-
+                        val paint = android.graphics.Paint().apply { color = labelColor; textSize = 22f; textAlign = android.graphics.Paint.Align.LEFT }
+                        drawText("${state.maxTimelineBalance.toInt()} €", 0f, -10f, paint)
                         paint.textAlign = android.graphics.Paint.Align.CENTER
                         val formatter = DateTimeFormatter.ofPattern("dd MMM")
-                        drawText(balanceTimeline.first().first.format(formatter), 25f, height + 32f, paint)
-                        drawText(balanceTimeline.last().first.format(formatter), width - 25f, height + 32f, paint)
+                        drawText(state.lineChartPoints.first().date.format(formatter), 25f, height + 32f, paint)
+                        drawText(state.lineChartPoints.last().date.format(formatter), width - 25f, height + 32f, paint)
                     }
                 }
             }
@@ -453,10 +382,6 @@ fun LineChartSection(transactions: List<TransactionEntity>) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
-    var showCatDialog by remember { mutableStateOf(false) }
-    var calendarCatToDelete by remember { mutableStateOf<TransactionCategoryEntity?>(null) }
-    var expandedCats by remember { mutableStateOf(false) }
-
     val selectedCategory = state.categories.find { it.id == state.newTransactionCategoryId }
 
     if (state.showDatePicker) {
@@ -476,9 +401,7 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
         title = { Text("Nuova Transazione", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.LightGray.copy(alpha = 0.2f)).padding(3.dp)
-                ) {
+                Row(modifier = Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color.LightGray.copy(alpha = 0.2f)).padding(3.dp)) {
                     Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(if (!state.newTransactionIsIncome) Color(0xFFFFEAEA) else Color.Transparent).clickable { viewModel.onAction(WalletAction.OnTypeChanged(false)) }, contentAlignment = Alignment.Center) {
                         Text("Uscita", color = if (!state.newTransactionIsIncome) Color(0xFFC62828) else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
@@ -487,34 +410,20 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                     }
                 }
 
-                UniSphereTextField(
-                    value = state.newTransactionTitle,
-                    onValueChange = { viewModel.onAction(WalletAction.OnTitleChanged(it)) },
-                    label = "Titolo",
-                    leadingIcon = Icons.Default.Title,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                UniSphereTextField(value = state.newTransactionTitle, onValueChange = { viewModel.onAction(WalletAction.OnTitleChanged(it)) }, label = "Titolo", leadingIcon = Icons.Default.Title, modifier = Modifier.fillMaxWidth())
+                UniSphereTextField(value = state.newTransactionAmount, onValueChange = { viewModel.onAction(WalletAction.OnAmountChanged(it)) }, label = "Importo", leadingIcon = Icons.Default.AttachMoney, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
-                UniSphereTextField(
-                    value = state.newTransactionAmount,
-                    onValueChange = { viewModel.onAction(WalletAction.OnAmountChanged(it)) },
-                    label = "Importo",
-                    leadingIcon = Icons.Default.AttachMoney,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                ExposedDropdownMenuBox(expanded = expandedCats, onExpandedChange = { expandedCats = it }) {
+                ExposedDropdownMenuBox(expanded = state.isCategoryDropdownExpanded, onExpandedChange = { viewModel.onAction(WalletAction.ToggleCategoryDropdown(it)) }) {
                     UniSphereTextField(
                         value = selectedCategory?.name ?: "Seleziona Categoria",
                         onValueChange = {},
                         label = "Categoria",
                         leadingIcon = Icons.Default.Category,
-                        modifier = Modifier.menuAnchor().fillMaxWidth(),
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCats) }
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isCategoryDropdownExpanded) }
                     )
-                    ExposedDropdownMenu(expanded = expandedCats, onDismissRequest = { expandedCats = false }) {
-                        DropdownMenuItem(text = { Text("+ Nuova Categoria", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }, onClick = { expandedCats = false; showCatDialog = true })
+                    ExposedDropdownMenu(expanded = state.isCategoryDropdownExpanded, onDismissRequest = { viewModel.onAction(WalletAction.ToggleCategoryDropdown(false)) }) {
+                        DropdownMenuItem(text = { Text("+ Nuova Categoria", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) }, onClick = { viewModel.onAction(WalletAction.ToggleCategoryCreationDialog(true)) })
                         HorizontalDivider()
                         state.categories.forEach { cat ->
                             DropdownMenuItem(
@@ -525,12 +434,12 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
                                             Spacer(Modifier.width(8.dp))
                                             Text(cat.name)
                                         }
-                                        IconButton(onClick = { calendarCatToDelete = cat }, modifier = Modifier.size(24.dp)) {
+                                        IconButton(onClick = { viewModel.onAction(WalletAction.OnRequestDeleteCategory(cat)) }, modifier = Modifier.size(24.dp)) {
                                             Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(16.dp))
                                         }
                                     }
                                 },
-                                onClick = { viewModel.onAction(WalletAction.OnCategoryChanged(cat.id)); expandedCats = false }
+                                onClick = { viewModel.onAction(WalletAction.OnCategoryChanged(cat.id)) }
                             )
                         }
                     }
@@ -548,47 +457,39 @@ fun AddTransactionDialog(state: WalletState, viewModel: WalletViewModel) {
         confirmButton = { Button(onClick = { viewModel.onAction(WalletAction.OnSaveTransactionClicked) }) { Text("Aggiungi") } }
     )
 
-    if (showCatDialog) {
-        var newCatName by remember { mutableStateOf("") }
-        var selectedColorHex by remember { mutableStateOf("#34C759") }
+    if (state.showCategoryCreationDialog) {
         val palette = listOf("#FF3B30", "#FF9500", "#FFCC00", "#34C759", "#007AFF", "#5856D6", "#AF52DE", "#8E8E93")
-
         AlertDialog(
-            onDismissRequest = { showCatDialog = false },
+            onDismissRequest = { viewModel.onAction(WalletAction.ToggleCategoryCreationDialog(false)) },
             title = { Text("Nuova Categoria", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    UniSphereTextField(value = newCatName, onValueChange = { newCatName = it }, label = "Nome Categoria", modifier = Modifier.fillMaxWidth())
+                    UniSphereTextField(value = state.newCategoryName, onValueChange = { viewModel.onAction(WalletAction.OnNewCategoryNameChanged(it)) }, label = "Nome Categoria", modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         palette.forEach { hex ->
-                            Box(Modifier.size(28.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex))).clickable { selectedColorHex = hex }.border(if (selectedColorHex == hex) 2.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape))
+                            Box(Modifier.size(28.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex))).clickable { viewModel.onAction(WalletAction.OnNewCategoryColorChanged(hex)) }.border(if (state.newCategoryColorHex == hex) 2.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape))
                         }
                     }
                 }
             },
             confirmButton = {
-                Button(onClick = { viewModel.onAction(WalletAction.OnCreateCategoryType(newCatName, selectedColorHex)); showCatDialog = false }) { Text("Crea") }
+                Button(onClick = { viewModel.onAction(WalletAction.OnCreateCategoryType(state.newCategoryName, state.newCategoryColorHex)) }) { Text("Crea") }
             }
         )
     }
 
-    // --- REFACTOR COMPLETATO: Sostituito AlertDialog nativo con UniSphereAlertDialog globale ---
-    calendarCatToDelete?.let { cat ->
+    state.categoryToDelete?.let { cat ->
         UniSphereAlertDialog(
             title = "Elimina Categoria",
             text = "Eliminando la categoria \"${cat.name}\" eliminerai anche tutte le transazioni collegate ad essa. Continuare?",
             confirmText = "Elimina",
-            onConfirm = {
-                viewModel.onAction(WalletAction.OnDeleteCategoryType(cat))
-                calendarCatToDelete = null
-            },
-            onDismiss = { calendarCatToDelete = null },
+            onConfirm = { viewModel.onAction(WalletAction.OnConfirmDeleteCategory) },
+            onDismiss = { viewModel.onAction(WalletAction.OnRequestDeleteCategory(null)) },
             dismissText = "Annulla"
         )
     }
 }
 
-// --- REFACTOR COMPLETATO: Sostituito l'intero blocco manuale lungo con UniSphereEmptyState globale ---
 @Composable
 fun EmptyDashboardState(onAddClick: () -> Unit) {
     UniSphereEmptyState(
@@ -599,45 +500,33 @@ fun EmptyDashboardState(onAddClick: () -> Unit) {
             Button(onClick = onAddClick, shape = RoundedCornerShape(14.dp)) {
                 Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Aggiungi Prima Transazione", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Aggiungi Prima Transazione", fontWeight = FontWeight.Bold)
             }
         }
     )
 }
 
 @Composable
-fun PieChartSection(transactions: List<TransactionEntity>, categories: List<TransactionCategoryEntity>) {
-    val total = transactions.sumOf { it.amount }
-    val groupedByCat = transactions.groupBy { it.categoryId }
-
+fun PieChartSection(slices: List<PieSlice>) {
     Card(
         modifier = Modifier.fillMaxWidth().height(220.dp).padding(top = 10.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxSize().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Canvas(modifier = Modifier.size(130.dp)) {
-                if (total > 0) {
-                    var startAngle = 0f
-                    groupedByCat.forEach { (catId, transList) ->
-                        val catColorHex = categories.find { it.id == catId }?.colorHex ?: "#8E8E93"
-                        val categoryTotal = transList.sumOf { it.amount }
-                        val sweepAngle = (categoryTotal.toFloat() / total.toFloat()) * 360f
-                        drawArc(color = Color(android.graphics.Color.parseColor(catColorHex)), startAngle = startAngle, sweepAngle = sweepAngle, useCenter = true)
-                        startAngle += sweepAngle
-                    }
+                var startAngle = 0f
+                slices.forEach { slice ->
+                    drawArc(color = Color(android.graphics.Color.parseColor(slice.colorHex)), startAngle = startAngle, sweepAngle = slice.sweepAngle, useCenter = true)
+                    startAngle += slice.sweepAngle
                 }
             }
             Column(modifier = Modifier.padding(start = 24.dp).weight(1f)) {
-                groupedByCat.forEach { (catId, _) ->
-                    val category = categories.find { it.id == catId }
+                slices.forEach { slice ->
                     Row(modifier = Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(10.dp).background(Color(android.graphics.Color.parseColor(category?.colorHex ?: "#8E8E93")), CircleShape))
+                        Box(modifier = Modifier.size(10.dp).background(Color(android.graphics.Color.parseColor(slice.colorHex)), CircleShape))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(category?.name ?: "Altro", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text(slice.categoryName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -647,12 +536,7 @@ fun PieChartSection(transactions: List<TransactionEntity>, categories: List<Tran
 
 @Composable
 fun TransactionItem(transaction: TransactionEntity, categoryName: String, colorHex: String, onClick: () -> Unit) {
-    val barColor = remember(colorHex) {
-        try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Gray }
-    }
-    val displayAmount = if (transaction.isIncome) "+€${transaction.amount}" else "-€${transaction.amount}"
-    val amountColor = if (transaction.isIncome) Color(0xFF2E7D32) else Color(0xFFC62828)
-
+    val barColor = remember(colorHex) { try { Color(android.graphics.Color.parseColor(colorHex)) } catch (_: Exception) { Color.Gray } }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -666,10 +550,9 @@ fun TransactionItem(transaction: TransactionEntity, categoryName: String, colorH
             onClick = onClick,
             trailingContent = {
                 Text(
-                    text = displayAmount,
-                    color = amountColor,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    text = if (transaction.isIncome) "+€${transaction.amount}" else "-€${transaction.amount}",
+                    color = if (transaction.isIncome) Color(0xFF2E7D32) else Color(0xFFC62828),
+                    fontWeight = FontWeight.Bold, fontSize = 15.sp
                 )
             }
         )
@@ -680,23 +563,14 @@ fun TransactionItem(transaction: TransactionEntity, categoryName: String, colorH
 @Composable
 fun TransactionDetailsDialog(state: WalletState, viewModel: WalletViewModel) {
     val transaction = state.selectedTransaction ?: return
-    var isEditing by remember { mutableStateOf(false) }
-    var title by remember { mutableStateOf(transaction.title) }
-    var amount by remember { mutableStateOf(transaction.amount.toString()) }
-    var categoryId by remember { mutableStateOf(transaction.categoryId) }
-    var date by remember { mutableStateOf(transaction.date) }
-    var isIncome by remember { mutableStateOf(transaction.isIncome) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    val matchedCat = state.categories.find { it.id == categoryId }
 
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
+    if (state.showDetailDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = state.detailDateValue.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
         DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
+            onDismissRequest = { viewModel.onAction(WalletAction.ToggleDetailDatePicker) },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
-                    showDatePicker = false
+                    datePickerState.selectedDateMillis?.let { viewModel.onAction(WalletAction.OnDetailDateChanged(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate())) }
                 }) { Text("OK") }
             }
         ) { DatePicker(state = datePickerState) }
@@ -704,33 +578,39 @@ fun TransactionDetailsDialog(state: WalletState, viewModel: WalletViewModel) {
 
     AlertDialog(
         onDismissRequest = { viewModel.onAction(WalletAction.OnTransactionSelected(null)) },
-        title = { Text(if (isEditing) "Modifica Transazione" else "Dettagli Transazione", fontWeight = FontWeight.Bold) },
+        title = { Text(if (state.isDetailEditingActive) "Modifica Transazione" else "Dettagli Transazione", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (isEditing) {
+                if (state.isDetailEditingActive) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = !isIncome, onClick = { isIncome = false }, label = { Text("Uscita") }, modifier = Modifier.weight(1f))
-                        FilterChip(selected = isIncome, onClick = { isIncome = true }, label = { Text("Entrata") }, modifier = Modifier.weight(1f))
+                        FilterChip(selected = !state.detailIsIncomeValue, onClick = { viewModel.onAction(WalletAction.OnDetailTypeChanged(false)) }, label = { Text("Uscita") }, modifier = Modifier.weight(1f))
+                        FilterChip(selected = state.detailIsIncomeValue, onClick = { viewModel.onAction(WalletAction.OnDetailTypeChanged(true)) }, label = { Text("Entrata") }, modifier = Modifier.weight(1f))
                     }
+                    UniSphereTextField(value = state.detailTitleText, onValueChange = { viewModel.onAction(WalletAction.OnDetailTitleChanged(it)) }, label = "Titolo", modifier = Modifier.fillMaxWidth())
+                    UniSphereTextField(value = state.detailAmountText, onValueChange = { viewModel.onAction(WalletAction.OnDetailAmountChanged(it)) }, label = "Importo", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
-                    UniSphereTextField(value = title, onValueChange = { title = it }, label = "Titolo", modifier = Modifier.fillMaxWidth())
-                    UniSphereTextField(value = amount, onValueChange = { amount = it }, label = "Importo", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-
-                    var expandedCats by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(expanded = expandedCats, onExpandedChange = { expandedCats = it }) {
+                    ExposedDropdownMenuBox(expanded = state.isDetailCategoryDropdownExpanded, onExpandedChange = { viewModel.onAction(WalletAction.ToggleDetailCategoryDropdown(it)) }) {
                         UniSphereTextField(
-                            value = state.categories.find { it.id == categoryId }?.name ?: "Seleziona",
+                            value = state.categories.find { it.id == state.detailCategoryId }?.name ?: "Seleziona",
                             onValueChange = {},
                             label = "Categoria",
                             leadingIcon = Icons.Default.Category,
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCats) }
+                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isDetailCategoryDropdownExpanded) }
                         )
-                        ExposedDropdownMenu(expanded = expandedCats, onDismissRequest = { expandedCats = false }) {
-                            state.categories.forEach { cat -> DropdownMenuItem(text = { Text(cat.name) }, onClick = { categoryId = cat.id; expandedCats = false }) }
+                        ExposedDropdownMenu(expanded = state.isDetailCategoryDropdownExpanded, onDismissRequest = { viewModel.onAction(WalletAction.ToggleDetailCategoryDropdown(false)) }) {
+                            state.categories.forEach { cat -> DropdownMenuItem(text = { Text(cat.name) }, onClick = { viewModel.onAction(WalletAction.OnDetailCategoryChanged(cat.id)) }) }
+                        }
+                    }
+                    OutlinedCard(onClick = { viewModel.onAction(WalletAction.ToggleDetailDatePicker) }, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarToday, null, tint = Color.Gray)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Data: ${state.detailDateValue.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))}", fontWeight = FontWeight.Medium)
                         }
                     }
                 } else {
+                    val matchedCat = state.categories.find { it.id == transaction.categoryId }
                     Text("Titolo: ${transaction.title}", fontWeight = FontWeight.Bold)
                     Text("Importo: ${if (transaction.isIncome) "+" else "-"}€${transaction.amount}")
                     Text("Categoria: ${matchedCat?.name ?: "Altro"}")
@@ -739,10 +619,10 @@ fun TransactionDetailsDialog(state: WalletState, viewModel: WalletViewModel) {
             }
         },
         confirmButton = {
-            if (isEditing) {
-                Button(onClick = { viewModel.onAction(WalletAction.OnUpdateTransactionClicked(transaction.copy(title = title, amount = amount.toDoubleOrNull() ?: 0.0, categoryId = categoryId, date = date, isIncome = isIncome))) }) { Text("Salva") }
+            if (state.isDetailEditingActive) {
+                Button(onClick = { viewModel.onAction(WalletAction.OnSaveUpdateTransactionClicked) }) { Text("Salva") }
             } else {
-                TextButton(onClick = { isEditing = true }) { Text("Modifica") }
+                TextButton(onClick = { viewModel.onAction(WalletAction.OnToggleDetailEditing) }) { Text("Modifica") }
             }
         },
         dismissButton = { TextButton(onClick = { viewModel.onAction(WalletAction.OnDeleteTransactionClicked) }) { Text("Elimina", color = Color.Red) } }

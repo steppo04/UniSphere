@@ -11,7 +11,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,12 +29,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.CalendarTypeEntity
-import com.example.unisphere.ui.composables.NavigationRoute
 import com.example.unisphere.ui.composables.UniSphereAlertDialog
 import com.example.unisphere.ui.composables.UniSphereButton
 import com.example.unisphere.ui.composables.UniSphereTextField
@@ -109,7 +106,7 @@ fun EditCalendarEventScreen(
                     onValueChange = {},
                     label = "Calendario",
                     leadingIcon = Icons.Default.Category,
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = state.isTypeExpanded) }
                 )
 
@@ -199,7 +196,7 @@ fun EditCalendarEventScreen(
                     onValueChange = { nuovoLuogo -> viewModel.onAction(AddCalendarEventAction.OnLocationChanged(nuovoLuogo)) },
                     label = "Luogo",
                     leadingIcon = Icons.Default.Place,
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     trailingIcon = {
                         if (state.isLoadingLocation) {
@@ -278,7 +275,6 @@ fun EditCalendarEventScreen(
         )
     }
 
-    // --- REFACTOR COMPLETATO: Sostituito AlertDialog nativo con UniSphereAlertDialog globale ---
     calendarToDelete?.let { cal ->
         UniSphereAlertDialog(
             title = "Elimina Calendario",
@@ -293,7 +289,6 @@ fun EditCalendarEventScreen(
         )
     }
 
-    // System Pickers Nativi
     if (state.showDatePicker) {
         val datePickerState = rememberDatePickerState()
         DatePickerDialog(

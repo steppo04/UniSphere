@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -17,13 +16,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.EventEntity
@@ -47,12 +46,11 @@ fun EventDetailScreen(
     val event = state.event
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val calendarColor = remember(state.calendarColorHex) {
         try {
-            Color(android.graphics.Color.parseColor(state.calendarColorHex))
+            Color(state.calendarColorHex.toColorInt())
         } catch (_: Exception) {
             Color.Gray
         }
@@ -88,7 +86,7 @@ fun EventDetailScreen(
         }
     ) { padding ->
 
-        // --- REFACTOR COMPLETATO: Sostituito l'AlertDialog nativo con UniSphereAlertDialog globale ---
+        // Finestra di dialogo per la cancellazione dell'evento
         if (showDeleteDialog) {
             UniSphereAlertDialog(
                 title = "Elimina Evento",
@@ -156,8 +154,8 @@ fun EventMainInfo(event: EventEntity, calendarName: String, calendarColor: Color
 
             UniSphereListItem(
                 headlineText = calendarName,
-                supportingText = "Calendario di riferimento",
-                leadingBarColor = calendarColor.copy(alpha = 0.4f)
+                supportingText = "Calendario",
+                leadingBarColor = calendarColor
             )
 
             if (event.location.isNotBlank()) {
@@ -165,8 +163,8 @@ fun EventMainInfo(event: EventEntity, calendarName: String, calendarColor: Color
 
                 UniSphereListItem(
                     headlineText = event.location,
-                    supportingText = "Indirizzo dell'appuntamento",
-                    leadingBarColor = MaterialTheme.colorScheme.secondary
+                    supportingText = "Luogo",
+                    leadingBarColor = calendarColor
                 )
             }
         }

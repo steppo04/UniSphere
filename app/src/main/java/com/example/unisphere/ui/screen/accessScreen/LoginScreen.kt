@@ -1,6 +1,5 @@
 package com.example.unisphere.ui.screen.accessScreen
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,9 +39,6 @@ fun LoginScreen(
     val state = viewModel.state
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
-
-    // STATO LOCALE: Gestisce la visibilità della password (occhio aperto/chiuso)
     var isPasswordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.successMessage) {
@@ -105,7 +101,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Campo Email Globale
+            // Campo Email
             UniSphereTextField(
                 value = state.email,
                 onValueChange = { viewModel.onAction(LoginAction.OnEmailChanged(it)) },
@@ -118,18 +114,16 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Campo Password Globale con Icona Occhio per Visibilità
+            // Campo Password Globale
             UniSphereTextField(
                 value = state.password,
                 onValueChange = { viewModel.onAction(LoginAction.OnPasswordChanged(it)) },
                 label = "Password",
                 leadingIcon = Icons.Outlined.Lock,
-                // MODIFICATO: La trasformazione dipende dallo stato locale isPasswordVisible
                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth(),
                 isError = state.isError,
-                // AGGIUNTO: TrailingIcon con logica di toggle per la visibilità
                 trailingIcon = {
                     val image = if (isPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
                     val description = if (isPasswordVisible) "Nascondi password" else "Mostra password"
@@ -139,20 +133,14 @@ fun LoginScreen(
                     }
                 }
             )
-
+            // -- password dimenticata
             TextButton(
-                onClick = {
-                    if (state.email.trim().isBlank() || !state.email.contains("@")) {
-                        Toast.makeText(context, "Inserisci una mail valida prima di continuare", Toast.LENGTH_SHORT).show()
-                    } else {
-                        viewModel.onAction(LoginAction.OnForgotPasswordClicked)
-                    }
-                },
+                onClick = { viewModel.onAction(LoginAction.OnForgotPasswordClicked) },
                 modifier = Modifier.align(Alignment.End).padding(top = 2.dp)
             ) {
                 Text("Password dimenticata?", fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
-
+            //-- messaggi di errore
             if (state.isError) {
                 Text(
                     text = state.errorMessage ?: "Credenziali non corrette. Riprova.",
@@ -163,7 +151,7 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
+            //-- bottone accedi
             UniSphereButton(
                 text = "Accedi",
                 isLoading = state.isLoading,
@@ -181,7 +169,7 @@ fun LoginScreen(
             )
 
             Spacer(modifier = Modifier.height(24.dp))
-
+            //-- crea account
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Nuovo su UniSphere?", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = { navController.navigate(NavigationRoute.SignInScreen) }) {

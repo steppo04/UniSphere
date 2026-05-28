@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material3.*
@@ -20,9 +22,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModelgit 
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.toColorInt
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.EventEntity
 import com.example.unisphere.ui.composables.AppBar
@@ -31,12 +34,6 @@ import com.example.unisphere.ui.composables.NavigationRoute
 import com.example.unisphere.ui.composables.UniSphereEmptyState
 import com.example.unisphere.ui.composables.UniSphereListItem
 import com.example.unisphere.ui.composables.UniSphereSectionHeader
-import com.kizitonwose.calendar.compose.HorizontalCalendar
-import com.kizitonwose.calendar.compose.rememberCalendarState
-import com.kizitonwose.calendar.compose.CalendarState as LibCalendarState
-import com.kizitonwose.calendar.core.CalendarDay
-import com.kizitonwose.calendar.core.DayPosition
-import com.kizitonwose.calendar.core.daysOfWeek
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -44,7 +41,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     navController: NavHostController,
@@ -53,17 +49,6 @@ fun CalendarScreen(
     val uiState = viewModel.state
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    val currentMonth = remember { YearMonth.now() }
-    val startMonth = remember { currentMonth.minusMonths(50) }
-    val endMonth = remember { currentMonth.plusMonths(50) }
-    val daysOfWeek = remember { daysOfWeek() }
-    val calendarState = rememberCalendarState(
-        startMonth = startMonth,
-        endMonth = endMonth,
-        firstVisibleMonth = currentMonth,
-        firstDayOfWeek = daysOfWeek.first()
-    )
 
     Scaffold(
         topBar = { AppBar(title = "UniCalendar", navController) },
@@ -83,7 +68,7 @@ fun CalendarScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
                 Column(
                     modifier = Modifier
@@ -91,8 +76,13 @@ fun CalendarScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(8.dp)
                 ) {
-                    CalendarHeaderSection(calendarState.firstVisibleMonth.yearMonth)
-                    CalendarGridCard(calendarState, daysOfWeek, uiState, viewModel)
+                    CustomCalendarCard(
+                        currentMonth = uiState.currentMonth,
+                        gridDays = uiState.gridDays,
+                        selectedDate = uiState.selectedDate,
+                        onMonthChange = { viewModel.onAction(CalendarAction.OnMonthChanged(it)) },
+                        onDateSelected = { viewModel.onAction(CalendarAction.OnDateSelected(it)) }
+                    )
                 }
 
                 Column(
@@ -111,28 +101,146 @@ fun CalendarScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
-                CalendarHeaderSection(calendarState.firstVisibleMonth.yearMonth)
-                CalendarGridCard(calendarState, daysOfWeek, uiState, viewModel)
+                CustomCalendarCard(
+                    currentMonth = uiState.currentMonth,
+                    gridDays = uiState.gridDays,
+                    selectedDate = uiState.selectedDate,
+                    onMonthChange = { viewModel.onAction(CalendarAction.OnMonthChanged(it)) },
+                    onDateSelected = { viewModel.onAction(CalendarAction.OnDateSelected(it)) }
+                )
                 EventListSection(uiState, navController)
                 Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
 }
-
+//card calendario
 @Composable
-fun EventListSection(uiState: CalendarState, navController: NavHostController) {
+private fun CustomCalendarCard(
+    currentMonth: YearMonth,
+    gridDays: List<LocalDate?>,
+    selectedDate: LocalDate,
+    onMonthChange: (YearMonth) -> Unit,
+    onDateSelected: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header di navigazione mesi
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${currentMonth.month.getDisplayName(TextStyle.FULL, Locale.ITALY).replaceFirstChar { it.uppercase() }} ${currentMonth.year}",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row {
+                    IconButton(onClick = { onMonthChange(currentMonth.minusMonths(1)) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Mese precedente")
+                    }
+                    IconButton(onClick = { onMonthChange(currentMonth.plusMonths(1)) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Mese successivo")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Giorni della settimana fissi
+            Row(modifier = Modifier.fillMaxWidth()) {
+                val daysOfWeek = listOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+                daysOfWeek.forEach { day ->
+                    Text(
+                        text = day.getDisplayName(TextStyle.SHORT, Locale.ITALY).uppercase(),
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Rendering passivo delle righe tramite i blocchi calcolati nel ViewModel
+            val chunks = gridDays.chunked(7)
+            chunks.forEach { week ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    week.forEach { date ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (date != null) {
+                                val isSelected = date == selectedDate
+                                val isToday = date == LocalDate.now()
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when {
+                                                isSelected -> MaterialTheme.colorScheme.primary
+                                                isToday -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                                else -> Color.Transparent
+                                            }
+                                        )
+                                        .clickable { onDateSelected(date) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = date.dayOfMonth.toString(),
+                                        fontSize = 15.sp,
+                                        fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                        color = when {
+                                            isSelected -> MaterialTheme.colorScheme.onPrimary
+                                            isToday -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (week.size < 7) {
+                        Spacer(modifier = Modifier.weight((7 - week.size).toFloat()))
+                    }
+                }
+            }
+        }
+    }
+}
+
+//Sezione eventi
+@Composable
+private fun EventListSection(uiState: CalendarState, navController: NavHostController) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
 
-        // REFACTOR: Intestazione unificata tramite UniSphereSectionHeader
         UniSphereSectionHeader(
             title = "Eventi del ${uiState.selectedDate.dayOfMonth} ${uiState.selectedDate.month.getDisplayName(TextStyle.FULL, Locale.ITALY)}"
         )
 
         if (uiState.events.isEmpty()) {
-            // REFACTOR: Gestione dell'Empty State centralizzata e grafica avanzata
             UniSphereEmptyState(
                 icon = Icons.Default.EventNote,
                 title = "Nessun impegno",
@@ -143,7 +251,7 @@ fun EventListSection(uiState: CalendarState, navController: NavHostController) {
                 val matchedCalendar = uiState.calendars.find { it.id == evento.calendar }
                 val calendarColorHex = matchedCalendar?.color ?: "#8E8E93"
 
-                EventCard(event = evento, calendarColorHex = calendarColorHex, navController = navController)
+                CalendarEventItem(event = evento, calendarColorHex = calendarColorHex, navController = navController)
 
                 if (index < uiState.events.lastIndex) {
                     HorizontalDivider(
@@ -157,13 +265,13 @@ fun EventListSection(uiState: CalendarState, navController: NavHostController) {
     }
 }
 
+// singolo evento
 @Composable
-fun EventCard(event: EventEntity, calendarColorHex: String, navController: NavHostController) {
+private fun CalendarEventItem(event: EventEntity, calendarColorHex: String, navController: NavHostController) {
     val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-
     val barColor = remember(calendarColorHex) {
         try {
-            Color(android.graphics.Color.parseColor(calendarColorHex))
+            Color(calendarColorHex.toColorInt())
         } catch (_: Exception) {
             Color.Gray
         }
@@ -190,98 +298,4 @@ fun EventCard(event: EventEntity, calendarColorHex: String, navController: NavHo
             }
         }
     )
-}
-
-@Composable
-fun DayElement(day: CalendarDay, isSelected: Boolean, isToday: Boolean, onClick: (CalendarDay) -> Unit) {
-    Box(
-        modifier = Modifier
-            .aspectRatio(1f)
-            .padding(4.dp)
-            .clip(CircleShape)
-            .background(
-                when {
-                    isSelected -> MaterialTheme.colorScheme.primary
-                    isToday -> MaterialTheme.colorScheme.primaryContainer
-                    else -> Color.Transparent
-                }
-            )
-            .clickable(
-                enabled = day.position == DayPosition.MonthDate,
-                onClick = { onClick(day) }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = day.date.dayOfMonth.toString(),
-            fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-            color = when {
-                isSelected -> Color.White
-                day.position != DayPosition.MonthDate -> Color.LightGray
-                else -> MaterialTheme.colorScheme.onSurface
-            }
-        )
-    }
-}
-
-@Composable
-fun DaysOfWeekTitle(daysOfWeek: List<DayOfWeek>) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        for (dayOfWeek in daysOfWeek) {
-            Text(
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                text = dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.ITALY).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-        }
-    }
-}
-
-@Composable
-fun CalendarHeaderSection(visibleMonth: YearMonth) {
-    Column(modifier = Modifier.padding(20.dp)) {
-        Text(
-            text = visibleMonth.month.getDisplayName(TextStyle.FULL, Locale.ITALY).replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = visibleMonth.year.toString(),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.secondary
-        )
-    }
-}
-
-@Composable
-fun CalendarGridCard(
-    state: LibCalendarState,
-    daysOfWeek: List<DayOfWeek>,
-    uiState: CalendarState,
-    viewModel: CalendarViewModel
-) {
-    Card(
-        modifier = Modifier.padding(horizontal = 16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = CardDefaults.outlinedCardBorder(),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Column(modifier = Modifier.padding(bottom = 12.dp)) {
-            DaysOfWeekTitle(daysOfWeek = daysOfWeek)
-            HorizontalCalendar(
-                state = state,
-                dayContent = { day ->
-                    DayElement(
-                        day = day,
-                        isSelected = uiState.selectedDate == day.date,
-                        isToday = day.date == LocalDate.now(),
-                        onClick = { viewModel.onAction(CalendarAction.OnDateSelected(it.date)) }
-                    )
-                }
-            )
-        }
-    }
 }

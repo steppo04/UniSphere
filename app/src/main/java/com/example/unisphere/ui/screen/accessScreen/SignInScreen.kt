@@ -40,8 +40,6 @@ fun SignInScreen(
 ) {
     val state = viewModel.state
     val scrollState = rememberScrollState()
-
-    // STATI LOCALI: Gestiscono la visibilità delle icone occhio in modo indipendente
     var isPasswordVisible by remember { mutableStateOf(false) }
     var isConfirmPasswordVisible by remember { mutableStateOf(false) }
 
@@ -144,7 +142,6 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // PRIMO CAMPO PASSWORD
         UniSphereTextField(
             value = state.password,
             onValueChange = { viewModel.onAction(SignInAction.OnPasswordChanged(it)) },
@@ -164,7 +161,6 @@ fun SignInScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // NUOVO: SECONDO CAMPO CONFERMA PASSWORD
         UniSphereTextField(
             value = state.confirmPassword,
             onValueChange = { viewModel.onAction(SignInAction.OnConfirmPasswordChanged(it)) },
@@ -197,8 +193,7 @@ fun SignInScreen(
             text = "Crea Account",
             isLoading = state.isLoading,
             modifier = Modifier.fillMaxWidth(),
-            // Il bottone si blocca se le password inserite non sono identiche
-            enabled = state.password.isNotBlank() && state.confirmPassword.isNotBlank() && state.password == state.confirmPassword,
+            enabled = state.isButtonEnabled,
             onClick = {
                 viewModel.onAction(SignInAction.OnCreateAccountClicked) {
                     navController.navigate(NavigationRoute.Homescreen) {

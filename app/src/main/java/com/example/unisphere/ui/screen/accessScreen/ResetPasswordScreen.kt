@@ -13,7 +13,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -35,7 +34,6 @@ fun ResetPasswordScreen(
     val state = viewModel.state
     val scrollState = rememberScrollState()
 
-    // Stati locali per gestire gli occhi di visibilità separatamente
     var isPassVisible by remember { mutableStateOf(false) }
     var isConfirmPassVisible by remember { mutableStateOf(false) }
 
@@ -60,7 +58,6 @@ fun ResetPasswordScreen(
         Text(
             text = "Scegli la nuova Password",
             fontSize = 22.sp,
-            fontWeight = FontWeight.ExtraBold,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -129,10 +126,7 @@ fun ResetPasswordScreen(
         UniSphereButton(
             text = "Aggiorna Password",
             isLoading = state.isLoading,
-            // Il bottone si abilita solo se i campi non sono vuoti e coincidono perfettamente
-            enabled = state.newPasswordCode.isNotBlank() &&
-                    state.confirmPasswordCode.isNotBlank() &&
-                    state.newPasswordCode == state.confirmPasswordCode,
+            enabled = state.isButtonEnabled,
             modifier = Modifier.fillMaxWidth(),
             onClick = {
                 viewModel.finalizePasswordReset {

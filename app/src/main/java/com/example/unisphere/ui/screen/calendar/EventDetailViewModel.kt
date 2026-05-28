@@ -12,6 +12,7 @@ import com.example.unisphere.db.local.entity.EventEntity
 import com.example.unisphere.repository.EventRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -20,11 +21,10 @@ import org.osmdroid.util.GeoPoint
 import java.util.Locale
 import javax.inject.Inject
 
-// --- STATO DEL DETTAGLIO AGGIORNATO ---
 data class EventDetailState(
     val event: EventEntity? = null,
     val calendarName: String = "Caricamento...",
-    val calendarColorHex: String = "#8E8E93", // Grigio neutro di default
+    val calendarColorHex: String = "#8E8E93",
     val isLoading: Boolean = true,
     val geoPoint: GeoPoint? = null
 )
@@ -47,15 +47,14 @@ class EventDetailViewModel @Inject constructor(
 
     private fun loadEvent() {
         viewModelScope.launch {
-            // Ascolta l'evento dal DB in tempo reale
             repository.getEventById(eventId).collectLatest { event ->
                 if (event != null) {
-                    // Coordinate per la mappa
+                    delay(300)
+
                     val point = if (event.location.isNotBlank()) {
                         getCoordinatesFromAddress(event.location)
                     } else null
 
-                    // Recupera la lista dei calendari dell'utente per trovare quello associato
                     val calendars = repository.getCalendarsForUser(event.userUid).firstOrNull() ?: emptyList()
                     val matchedCalendar = calendars.find { it.id == event.calendar }
 
@@ -63,7 +62,7 @@ class EventDetailViewModel @Inject constructor(
                         event = event,
                         calendarName = matchedCalendar?.name ?: "Nessun Calendario",
                         calendarColorHex = matchedCalendar?.color ?: "#8E8E93",
-                        geoPoint = point,
+                        geoPoint = point, // Il punto aggiornato viene inserito nello stato e ridisegnato all'istante
                         isLoading = false
                     )
                 }
@@ -71,9 +70,6 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Trasforma l'indirizzo testuale in un GeoPoint (Latitudine e Longitudine)
-     */
     private suspend fun getCoordinatesFromAddress(address: String): GeoPoint? {
         return withContext(Dispatchers.IO) {
             try {
@@ -91,9 +87,6 @@ class EventDetailViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Elimina l'evento corrente dal database
-     */
     fun deleteEvent(onSuccess: () -> Unit) {
         state.event?.let { currentEvent ->
             viewModelScope.launch {

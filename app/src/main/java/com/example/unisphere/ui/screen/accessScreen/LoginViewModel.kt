@@ -21,7 +21,6 @@ data class LoginState(
     val successMessage: String? = null
 )
 
-// Azioni dell'utente
 sealed interface LoginAction {
     data class OnEmailChanged(val value: String) : LoginAction
     data class OnPasswordChanged(val value: String) : LoginAction
@@ -52,9 +51,30 @@ class LoginViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // Autenticazione asincrona tramite Supabase Auth
+    // Funzione helper riutilizzabile per convalidare la stringa email via codice
+    private fun isEmailInvalid(email: String): Boolean {
+        val trimmed = email.trim()
+        return trimmed.isBlank() || !trimmed.contains("@") || !trimmed.contains(".")
+    }
+
     private fun performLogin(onSuccess: () -> Unit) {
-        if (state.isLoading) return // Evita click multipli concorrenti
+        if (isEmailInvalid(state.email)) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "Inserisci un indirizzo email valido prima di accedere."
+            )
+            return
+        }
+
+        if (state.password.isBlank()) {
+            state = state.copy(
+                isError = true,
+                errorMessage = "La password non può essere vuota."
+            )
+            return
+        }
+
+        if (state.isLoading) return
 
         viewModelScope.launch {
             state = state.copy(isLoading = true, isError = false, successMessage = null)
@@ -64,7 +84,7 @@ class LoginViewModel @Inject constructor() : ViewModel() {
                     password = state.password
                 }
                 state = state.copy(isLoading = false)
-                onSuccess() // Callback delegata alla UI per la navigazione
+                onSuccess()
             } catch (e: Exception) {
                 state = state.copy(
                     isLoading = false,
@@ -75,13 +95,12 @@ class LoginViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // Gestione della logica di business per il ripristino credenziali via Email
     private fun performPasswordReset() {
         val emailTrimmed = state.email.trim()
-        if (emailTrimmed.isBlank() || !emailTrimmed.contains("@")) {
+        if (isEmailInvalid(emailTrimmed)) {
             state = state.copy(
                 isError = true,
-                errorMessage = "Inserisci una mail valida."
+                errorMessage = "Inserisci una mail valida nel campo di testo per ricevere il link di ripristino."
             )
             return
         }

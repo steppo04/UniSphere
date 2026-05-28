@@ -35,7 +35,7 @@ class EditCalendarEventViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
-    var state by mutableStateOf(AddCalendarEventState())
+    var state by mutableStateOf(AddCalendarEventState(isButtonEnabled = true))
         private set
 
     private val eventId: Int = checkNotNull(savedStateHandle["eventId"])
@@ -47,16 +47,17 @@ class EditCalendarEventViewModel @Inject constructor(
         loadEventDetails()
     }
 
+    // Carica la lista dei calendari utente
     private fun loadUserCalendars() {
         viewModelScope.launch {
             val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
-            // Ascoltiamo i calendari dell'utente in tempo reale anche in modifica
             repository.getCalendarsForUser(uid).collectLatest { calendars ->
                 state = state.copy(calendarTypes = calendars)
             }
         }
     }
 
+    // Ripristina i dettagli dell'evento da modificare
     private fun loadEventDetails() {
         viewModelScope.launch {
             val event = repository.getEventById(eventId).firstOrNull()
@@ -73,7 +74,6 @@ class EditCalendarEventViewModel @Inject constructor(
             }
         }
     }
-
     fun onAction(action: AddCalendarEventAction, onBack: () -> Unit = {}) {
         when (action) {
             is AddCalendarEventAction.OnTitleChanged -> state = state.copy(title = action.value)
@@ -84,51 +84,40 @@ class EditCalendarEventViewModel @Inject constructor(
             is AddCalendarEventAction.OnDescriptionChanged -> state = state.copy(description = action.value)
             is AddCalendarEventAction.OnCalendarChanged -> state = state.copy(selectedCalendarId = action.value, isTypeExpanded = false)
             is AddCalendarEventAction.OnDateChanged -> state = state.copy(selectedDate = action.value, showDatePicker = false)
-
             is AddCalendarEventAction.OnStartTimeChanged -> state = state.copy(selectedStartTime = action.value, showStartTimePicker = false)
             is AddCalendarEventAction.ToggleStartTimePicker -> state = state.copy(showStartTimePicker = action.show)
-
             is AddCalendarEventAction.OnEndTimeChanged -> state = state.copy(selectedEndTime = action.value, showEndTimePicker = false)
             is AddCalendarEventAction.ToggleEndTimePicker -> state = state.copy(showEndTimePicker = action.show)
-
             is AddCalendarEventAction.ToggleTypeExpanded -> state = state.copy(isTypeExpanded = action.expanded)
             is AddCalendarEventAction.ToggleLocationExpanded -> state = state.copy(isLocationExpanded = action.expanded)
             is AddCalendarEventAction.ToggleDatePicker -> state = state.copy(showDatePicker = action.show)
-
-            // Gestione dei metodi di aggiunta ed eliminazione dei calendari ereditati dall'interfaccia
             is AddCalendarEventAction.OnCreateCalendarType -> createCalendarType(action.name, action.colorHex)
             is AddCalendarEventAction.OnDeleteCalendarType -> deleteCalendarType(action.calendar)
-
             AddCalendarEventAction.OnGetCurrentLocation -> getCurrentLocation()
             AddCalendarEventAction.OnSaveClicked -> updateEvent(onBack)
         }
     }
 
+    // Creazione di una nuova categoria di calendario
     private fun createCalendarType(name: String, colorHex: String) {
         if (name.isBlank()) return
         viewModelScope.launch {
             val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
-            val newCalendar = CalendarTypeEntity(
-                name = name,
-                color = colorHex,
-                userId = uid
-            )
-            repository.saveCalendar(newCalendar)
+            repository.saveCalendar(CalendarTypeEntity(name = name, color = colorHex, userId = uid))
         }
     }
 
+    // Eliminazione di una categoria di calendario
     private fun deleteCalendarType(calendar: CalendarTypeEntity) {
         viewModelScope.launch {
             repository.deleteCalendar(calendar)
         }
     }
 
+    // Salva l'evento aggiornato senza blocchi logici preliminari
     private fun updateEvent(onSuccess: () -> Unit) {
-        if (state.title.isBlank() || state.selectedCalendarId == 0) return
-
         viewModelScope.launch {
             val eventOld = repository.getEventById(eventId).firstOrNull()
-
             if (eventOld != null) {
                 val updatedEvent = eventOld.copy(
                     title = state.title,
@@ -145,7 +134,7 @@ class EditCalendarEventViewModel @Inject constructor(
         }
     }
 
-    // --- LOGICA GPS & GEOCODER ---
+    // Rilevamento della posizione GPS
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation() {
         viewModelScope.launch {
@@ -161,6 +150,7 @@ class EditCalendarEventViewModel @Inject constructor(
         }
     }
 
+    // Autocompletamento degli indirizzi
     private fun fetchLocationSuggestions(query: String) {
         if (query.length < 3) {
             state = state.copy(locationSuggestions = emptyList())
@@ -183,6 +173,7 @@ class EditCalendarEventViewModel @Inject constructor(
         }
     }
 
+    // Geocoding inverso da coordinate a stringa
     private suspend fun getAddressFromLocation(latitude: Double, longitude: Double): String? {
         val geocoder = Geocoder(getApplication(), Locale.getDefault())
         return try {

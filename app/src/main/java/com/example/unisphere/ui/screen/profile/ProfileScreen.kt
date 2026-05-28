@@ -14,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -40,14 +39,8 @@ fun ProfileScreen(
     val scrollState = rememberScrollState()
 
     var refreshTrigger by remember { mutableStateOf(System.currentTimeMillis()) }
-
-    var showEditUsernameDialog by remember { mutableStateOf(false) }
-    var showEditEmailDialog by remember { mutableStateOf(false) }
-    var showThemeDialog by remember { mutableStateOf(false) }
-    var showAppInfoDialog by remember { mutableStateOf(false) }
-
     val openImagePicker = rememberImagePicker { uri ->
-        viewModel.updateProfileImage(uri.toString())
+        viewModel.onAction(ProfileAction.OnProfileImageUpdated(uri.toString()))
         refreshTrigger = System.currentTimeMillis()
     }
 
@@ -66,6 +59,7 @@ fun ProfileScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Sezione Avatar Profilo
             UniSphereAvatar(
                 username = state.username,
                 profilePictureUri = state.profilePictureUri?.let {
@@ -93,25 +87,25 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
+            // Gruppo: Dettagli Account
             AppleSettingsGroup(title = "Dettagli Account") {
                 ProfileInfoItem(icon = Icons.Default.Badge, label = "Nome completo", value = "${state.name} ${state.surname}")
                 ProfileDivider()
                 ProfileInfoItem(icon = Icons.Default.Person, label = "Username", value = state.username, isEditable = true) {
-                    viewModel.clearDialogError()
-                    showEditUsernameDialog = true
+                    viewModel.onAction(ProfileAction.OnUsernameDialogToggle(true))
                 }
                 ProfileDivider()
                 ProfileInfoItem(icon = Icons.Default.Email, label = "Email", value = state.email, isEditable = true) {
-                    viewModel.clearDialogError()
-                    showEditEmailDialog = true
+                    viewModel.onAction(ProfileAction.OnEmailDialogToggle(true))
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Gruppo: Preferenze Applicazione
             AppleSettingsGroup(title = "Preferenze Applicazione") {
                 SettingsItem(icon = Icons.Default.Palette, title = "Tema dell'applicazione", subtitle = state.currentTheme) {
-                    showThemeDialog = true
+                    viewModel.onAction(ProfileAction.OnThemeDialogToggle(true))
                 }
                 ProfileDivider()
                 SettingsItem(icon = Icons.Default.Lock, title = "Sicurezza Account", subtitle = "Cambia o reimposta password") {
@@ -119,19 +113,20 @@ fun ProfileScreen(
                 }
                 ProfileDivider()
                 SettingsItem(icon = Icons.Default.Info, title = "Info Applicazione", subtitle = "Versione 1.0.0 (Stable)") {
-                    showAppInfoDialog = true
+                    viewModel.onAction(ProfileAction.OnAppInfoDialogToggle(true))
                 }
             }
 
             Spacer(modifier = Modifier.height(36.dp))
 
+            // Logout
             Button(
                 onClick = {
-                    viewModel.logout {
+                    viewModel.onAction(ProfileAction.OnLogoutClicked {
                         navController.navigate(NavigationRoute.LoginScreen) {
                             popUpTo(0) { inclusive = true }
                         }
-                    }
+                    })
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -148,71 +143,72 @@ fun ProfileScreen(
         }
     }
 
-    if (showEditUsernameDialog) {
-        var tempUsername by remember { mutableStateOf(state.username) }
+    // Dialog: Modifica Username
+    if (state.showEditUsernameDialog) {
         AlertDialog(
-            onDismissRequest = { showEditUsernameDialog = false },
+            onDismissRequest = { viewModel.onAction(ProfileAction.OnUsernameDialogToggle(false)) },
             title = { Text("Modifica Username", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     UniSphereTextField(
-                        value = tempUsername,
-                        onValueChange = { tempUsername = it },
+                        value = state.tempUsernameText,
+                        onValueChange = { viewModel.onAction(ProfileAction.OnTempUsernameChanged(it)) },
                         label = "Nuovo Username",
                         modifier = Modifier.fillMaxWidth(),
                         isError = state.dialogError != null
                     )
                     if (state.dialogError != null) {
-                        Text(state.dialogError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                        Text(state.dialogError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             },
             confirmButton = {
                 UniSphereButton(
                     text = "Salva",
-                    onClick = {
-                        viewModel.updateUsername(tempUsername) { success -> if (success) showEditUsernameDialog = false }
-                    }
+                    onClick = { viewModel.onAction(ProfileAction.OnSaveUsernameClicked) }
                 )
             },
-            dismissButton = { TextButton(onClick = { showEditUsernameDialog = false }) { Text("Annulla") } }
+            dismissButton = {
+                TextButton(onClick = { viewModel.onAction(ProfileAction.OnUsernameDialogToggle(false)) }) { Text("Annulla") }
+            }
         )
     }
 
-    if (showEditEmailDialog) {
-        var tempEmail by remember { mutableStateOf(state.email) }
+    // Dialog: Modifica Email
+    if (state.showEditEmailDialog) {
         AlertDialog(
-            onDismissRequest = { showEditEmailDialog = false },
+            onDismissRequest = { viewModel.onAction(ProfileAction.OnEmailDialogToggle(false)) },
             title = { Text("Modifica Email", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     UniSphereTextField(
-                        value = tempEmail,
-                        onValueChange = { tempEmail = it },
+                        value = state.tempEmailText,
+                        onValueChange = { viewModel.onAction(ProfileAction.OnTempEmailChanged(it)) },
                         label = "Nuovo indirizzo email",
                         modifier = Modifier.fillMaxWidth(),
                         isError = state.dialogError != null
                     )
                     if (state.dialogError != null) {
-                        Text(state.dialogError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                        Text(state.dialogError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             },
             confirmButton = {
                 UniSphereButton(
                     text = "Salva",
-                    onClick = {
-                        viewModel.updateEmail(tempEmail) { success -> if (success) showEditEmailDialog = false }
-                    }
+                    onClick = { viewModel.onAction(ProfileAction.OnSaveEmailClicked) }
                 )
             },
-            dismissButton = { TextButton(onClick = { showEditEmailDialog = false }) { Text("Annulla") } }
+            dismissButton = {
+                TextButton(onClick = { viewModel.onAction(ProfileAction.OnEmailDialogToggle(false)) }) { Text("Annulla") }
+            }
         )
     }
 
-    if (showThemeDialog) {
+    // Dialog: Selezione Tema
+    if (state.showThemeDialog) {
         AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
+            onDismissRequest = { viewModel.onAction(ProfileAction.OnThemeDialogToggle(false)) },
             title = { Text("Seleziona Tema", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
@@ -220,10 +216,7 @@ fun ProfileScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    viewModel.setTheme(theme)
-                                    showThemeDialog = false
-                                }
+                                .clickable { viewModel.onAction(ProfileAction.OnThemeSelected(theme)) }
                                 .padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -238,14 +231,14 @@ fun ProfileScreen(
         )
     }
 
-    // --- REFACTOR COMPLETATO: Sostituito il vecchio blocco AlertDialog nativo con UniSphereAlertDialog ---
-    if (showAppInfoDialog) {
+    // Dialog: Info Applicazione
+    if (state.showAppInfoDialog) {
         UniSphereAlertDialog(
             title = "Info UniSphere",
             text = "UniSphere.\nSviluppato con Jetpack Compose, Hilt, Room e Supabase.\n\n© 2026 - Tutti i diritti riservati.",
             confirmText = "Chiudi",
-            onConfirm = { showAppInfoDialog = false },
-            onDismiss = { showAppInfoDialog = false }
+            onConfirm = { viewModel.onAction(ProfileAction.OnAppInfoDialogToggle(false)) },
+            onDismiss = { viewModel.onAction(ProfileAction.OnAppInfoDialogToggle(false)) }
         )
     }
 }

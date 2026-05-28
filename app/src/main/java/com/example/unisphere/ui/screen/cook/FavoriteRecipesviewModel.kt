@@ -36,8 +36,7 @@ class FavoriteRecipesViewModel @Inject constructor(
     private fun loadFavoriteRecipes() {
         val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
         viewModelScope.launch {
-            // Room tiene la lista aggiornata in tempo reale in caso di rimozioni
-            repository.getFavorites(uid).collectLatest { list ->
+                       repository.getFavorites(uid).collectLatest { list ->
                 state = state.copy(favorites = list, isLoading = false)
             }
         }

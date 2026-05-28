@@ -2,7 +2,6 @@ package com.example.unisphere.ui.screen.calendar
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Color as AndroidColor // SOLUZIONE: Alias pulito per evitare conflitti con il Color di Compose
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -12,7 +11,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,18 +29,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.example.unisphere.db.local.entity.CalendarTypeEntity
-import com.example.unisphere.ui.composables.NavigationRoute
 import com.example.unisphere.ui.composables.UniSphereAlertDialog
 import com.example.unisphere.ui.composables.UniSphereButton
 import com.example.unisphere.ui.composables.UniSphereTextField
 import java.time.Instant
 import java.time.LocalTime
-import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,7 +136,7 @@ fun AddCalendarEvent(
                                 text = {
                                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                            Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(AndroidColor.parseColor(cal.color))))
+                                            Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(cal.color.toColorInt())))
                                             Spacer(Modifier.width(12.dp))
                                             Text(cal.name)
                                         }
@@ -175,7 +172,8 @@ fun AddCalendarEvent(
                         onValueChange = {},
                         label = "Inizio",
                         leadingIcon = Icons.Default.AccessTime,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = state.isTimeError
                     )
                     Box(Modifier.matchParentSize().clickable { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.ToggleStartTimePicker(true)) })
                 }
@@ -185,13 +183,23 @@ fun AddCalendarEvent(
                         onValueChange = {},
                         label = "Fine",
                         leadingIcon = Icons.Default.AccessTime,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = state.isTimeError
                     )
                     Box(Modifier.matchParentSize().clickable { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.ToggleEndTimePicker(true)) })
                 }
             }
 
-            // Logica Luogo GPS
+            // Rendering diagnostico dell'errore temporale calcolato dal ViewModel
+            if (state.isTimeError) {
+                Text(
+                    text = state.timeErrorMessage ?: "",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            // luogo
             ExposedDropdownMenuBox(
                 expanded = state.isLocationExpanded && state.locationSuggestions.isNotEmpty(),
                 onExpandedChange = { viewModel.onAction(AddCalendarEventAction.ToggleLocationExpanded(it)) }
@@ -242,12 +250,11 @@ fun AddCalendarEvent(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottone Salva Evento
             UniSphereButton(
                 text = "Salva Evento",
-                onClick = { focusManager.clearFocus(); viewModel.onAction(AddCalendarEventAction.OnSaveClicked) { navController.popBackStack() } },
+                onClick = { focusManager.clearFocus(); viewModel.saveEventToRoom { navController.popBackStack() } },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = state.title.isNotBlank() && state.selectedCalendarId != 0
+                enabled = state.isButtonEnabled
             )
             Spacer(modifier = Modifier.height(40.dp))
         }
@@ -268,7 +275,7 @@ fun AddCalendarEvent(
                     Text("Scegli Colore", style = MaterialTheme.typography.labelLarge)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         palette.forEach { hex ->
-                            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(Color(AndroidColor.parseColor(hex))).clickable { selectedColorHex = hex }.border(if (selectedColorHex == hex) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape))
+                            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(Color(hex.toColorInt())).clickable { selectedColorHex = hex }.border(if (selectedColorHex == hex) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape))
                         }
                     }
                 }
@@ -295,18 +302,20 @@ fun AddCalendarEvent(
         )
     }
 
-    // Picker nativi di sistema
     if (state.showDatePicker) {
         val datePickerState = rememberDatePickerState()
         DatePickerDialog(
             onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleDatePicker(false)) },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
-                        val date = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val date = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
                         viewModel.onAction(AddCalendarEventAction.OnDateChanged(date))
                     }
                 }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.ToggleDatePicker(false)) }) { Text("Annulla") }
             }
         ) { DatePicker(state = datePickerState) }
     }
@@ -316,16 +325,17 @@ fun AddCalendarEvent(
         AlertDialog(
             onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleStartTimePicker(false)) },
             confirmButton = { TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.OnStartTimeChanged(LocalTime.of(timePickerState.hour, timePickerState.minute))) }) { Text("OK") } },
+            dismissButton = { TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.ToggleStartTimePicker(false)) }) { Text("Annulla") } },
             text = { TimePicker(state = timePickerState) }
         )
     }
 
-    // CORREZIONE COMPLETATA: Semplificato il blocco logico orario rimuovendo il controllo or duplicato
     if (state.showEndTimePicker) {
         val timePickerState = rememberTimePickerState(initialHour = state.selectedEndTime.hour, initialMinute = state.selectedEndTime.minute)
         AlertDialog(
             onDismissRequest = { viewModel.onAction(AddCalendarEventAction.ToggleEndTimePicker(false)) },
             confirmButton = { TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.OnEndTimeChanged(LocalTime.of(timePickerState.hour, timePickerState.minute))) }) { Text("OK") } },
+            dismissButton = { TextButton(onClick = { viewModel.onAction(AddCalendarEventAction.ToggleEndTimePicker(false)) }) { Text("Annulla") } },
             text = { TimePicker(state = timePickerState) }
         )
     }

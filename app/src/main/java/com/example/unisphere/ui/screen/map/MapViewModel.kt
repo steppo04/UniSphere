@@ -29,7 +29,6 @@ import java.util.Locale
 import javax.inject.Inject
 import kotlin.coroutines.resume
 
-// --- STATO AGGIORNATO (Gestisce le Entity reali) ---
 data class MapState(
     val pois: List<PointOfInterestEntity> = emptyList(),
     val showAddDialog: Boolean = false,
@@ -42,7 +41,6 @@ data class MapState(
     val isSearchingSuggestions: Boolean = false
 )
 
-// --- AZIONI AGGIORNATE ---
 sealed interface MapAction {
     data class OnNameChanged(val value: String) : MapAction
     data class OnAddressChanged(val value: String) : MapAction
@@ -50,7 +48,7 @@ sealed interface MapAction {
     data object OnSavePoiClicked : MapAction
     data object OnAddPoiClicked : MapAction
     data object OnDismissAddDialog : MapAction
-    data class OnDeletePoiClicked(val poi: PointOfInterestEntity) : MapAction // Passiamo l'entità completa per eliminarla al volo
+    data class OnDeletePoiClicked(val poi: PointOfInterestEntity) : MapAction
     data class OnPoiSelected(val poi: PointOfInterestEntity?) : MapAction
     data class OnSuggestionSelected(val address: String) : MapAction
     data object OnUseCurrentLocation : MapAction
@@ -75,7 +73,6 @@ class MapViewModel @Inject constructor(
     private fun loadUserPois() {
         val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: "default_user"
         viewModelScope.launch {
-            // Ascoltiamo i punti salvati nel database locale in tempo reale
             poiRepository.getPois(uid).collectLatest { list ->
                 state = state.copy(pois = list)
             }
@@ -106,7 +103,6 @@ class MapViewModel @Inject constructor(
                         )
                         poiRepository.savePoi(newPoi)
 
-                        // Ripristiniamo i campi del form
                         state = state.copy(
                             showAddDialog = false,
                             newPoiName = "",
@@ -141,7 +137,7 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    // --- GEOCODER & GPS LOGIC ---
+    // Cerca gli indirizzi consigliati tramite query testuale
     private fun fetchAddressSuggestions(query: String) {
         if (query.length < 3) {
             state = state.copy(addressSuggestions = emptyList())
@@ -167,6 +163,7 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    // Traduce una stringa testuale in coordinate Lat/Lng mediante Geocoder I/O thread
     private suspend fun getCoordinatesFromAddress(addressName: String): Pair<Double, Double>? {
         val geocoder = Geocoder(getApplication(), Locale.getDefault())
         return withContext(Dispatchers.IO) {
@@ -178,6 +175,7 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    // Intercetta la posizione GPS corrente inserendola nel modulo indirizzo
     @SuppressLint("MissingPermission")
     private fun getCurrentLocation() {
         viewModelScope.launch {

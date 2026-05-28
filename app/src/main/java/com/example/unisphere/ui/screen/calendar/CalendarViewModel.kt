@@ -15,17 +15,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import javax.inject.Inject
 
-// --- STATO AGGIORNATO ---
 data class CalendarState(
     val selectedDate: LocalDate = LocalDate.now(),
+    val currentMonth: YearMonth = YearMonth.now(),
+    val gridDays: List<LocalDate?> = emptyList(),
     val events: List<EventEntity> = emptyList(),
-    val calendars: List<CalendarTypeEntity> = emptyList() // Aggiunta la lista dei calendari per mappare i colori
+    val calendars: List<CalendarTypeEntity> = emptyList()
 )
 
 sealed interface CalendarAction {
     data class OnDateSelected(val date: LocalDate) : CalendarAction
+    data class OnMonthChanged(val month: YearMonth) : CalendarAction
 }
 
 @HiltViewModel
@@ -41,23 +44,47 @@ class CalendarViewModel @Inject constructor(
 
     init {
         loadUserCalendars()
-        onAction(CalendarAction.OnDateSelected(LocalDate.now()))
+        generateCalendarGrid(state.currentMonth)
+        observeEvents(state.selectedDate)
     }
 
     fun onAction(action: CalendarAction) {
         when (action) {
             is CalendarAction.OnDateSelected -> {
-                state = state.copy(selectedDate = action.date)
-                observeEvents(action.date)
+                if (state.selectedDate != action.date) {
+                    state = state.copy(selectedDate = action.date)
+                    observeEvents(action.date)
+                }
+            }
+            is CalendarAction.OnMonthChanged -> {
+                state = state.copy(currentMonth = action.month)
+                generateCalendarGrid(action.month)
             }
         }
+    }
+
+    private fun generateCalendarGrid(month: YearMonth) {
+        val firstDayOfMonth = month.atDay(1)
+        val daysInMonth = month.lengthOfMonth()
+        val firstDayOfWeekIndex = firstDayOfMonth.dayOfWeek.value - 1
+
+        val totalGridItems = mutableListOf<LocalDate?>()
+
+        for (i in 0 until firstDayOfWeekIndex) {
+            totalGridItems.add(null)
+        }
+
+        for (day in 1..daysInMonth) {
+            totalGridItems.add(month.atDay(day))
+        }
+
+        state = state.copy(gridDays = totalGridItems)
     }
 
     private fun loadUserCalendars() {
         val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: return
         calendarsJob?.cancel()
         calendarsJob = viewModelScope.launch {
-            // Restiamo in ascolto dei tipi di calendario per aggiornare i colori al volo se cambiano
             eventRepository.getCalendarsForUser(uid).collectLatest { listaCalendari ->
                 state = state.copy(calendars = listaCalendari)
             }
@@ -66,10 +93,9 @@ class CalendarViewModel @Inject constructor(
 
     private fun observeEvents(date: LocalDate) {
         val uid = SupabaseClient.client.auth.currentUserOrNull()?.id ?: return
-
         eventsJob?.cancel()
         eventsJob = viewModelScope.launch {
-            eventRepository.getEventsByDate(uid, date).collect { listaEventi ->
+            eventRepository.getEventsByDate(uid, date).collectLatest { listaEventi ->
                 state = state.copy(events = listaEventi)
             }
         }
