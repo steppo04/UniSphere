@@ -47,12 +47,12 @@ class UserRepository @Inject constructor(
     suspend fun updateLocalTheme(uid: String, theme: String) {
         userDao.updateTheme(uid, theme)
     }
-    // --- NUOVO: Controllo unicità Email ---
+    // --- Controllo unicità Email ---
     suspend fun isEmailTaken(email: String): Boolean {
         return userDao.countUsersByEmail(email) > 0
     }
 
-    // --- NUOVO: Controllo unicità Username ---
+    // --- Controllo unicità Username ---
     suspend fun isUsernameTaken(username: String): Boolean {
         return userDao.countUsersByUsername(username) > 0
     }
@@ -61,7 +61,7 @@ class UserRepository @Inject constructor(
         userDao.updateUsername(uid, newUsername)
     }
 
-    // NUOVO: Passa l'aggiornamento dell'email al DAO
+    //  Passa l'aggiornamento dell'email al DAO
     suspend fun updateEmail(uid: String, newEmail: String) {
         userDao.updateEmail(uid, newEmail)
     }

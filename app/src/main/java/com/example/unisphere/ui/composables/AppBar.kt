@@ -69,7 +69,7 @@ fun AppBar(
                 modifier = Modifier
                     .padding(end = 12.dp)
                     .size(elementSize)
-                    .clip(CircleShape) // Unico cerchio perfetto
+                    .clip(CircleShape)
                     .clickable { navController?.navigate(NavigationRoute.ProfileScreen) },
                 contentAlignment = Alignment.Center
             ) {

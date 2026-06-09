@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "users")
 data class UserEntity(
-    @PrimaryKey(autoGenerate = false) // FALSO perché l'ID ce lo darà Supabase!
+    @PrimaryKey(autoGenerate = false)
     val uid: String,
     val email: String,
     val name: String,

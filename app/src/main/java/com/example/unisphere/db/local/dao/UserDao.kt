@@ -14,12 +14,10 @@ interface UserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: UserEntity)
 
-    // Recupera l'utente. Usiamo 'Flow' così se i dati cambiano,
-    // l'interfaccia si aggiorna in tempo reale da sola!
     @Query("SELECT * FROM users WHERE uid = :uid")
     fun getUserById(uid: String): Flow<UserEntity?>
 
-    // (Opzionale) Svuota la tabella quando l'utente fa il logout
+    //  Svuota la tabella quando l'utente fa il logout
     @Query("DELETE FROM users")
     suspend fun clearUsers()
 
@@ -40,7 +38,6 @@ interface UserDao {
     @Query("UPDATE users SET username = :newUsername WHERE uid = :uid")
     suspend fun updateUsername(uid: String, newUsername: String)
 
-    // NUOVO: Aggiorna solo l'email nel DB locale
     @Query("UPDATE users SET email = :newEmail WHERE uid = :uid")
     suspend fun updateEmail(uid: String, newEmail: String)
 }

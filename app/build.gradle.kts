@@ -31,7 +31,6 @@ android {
         }
     }
     compileOptions {
-        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -74,7 +73,6 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
 
     implementation(libs.coil.compose)
-    coreLibraryDesugaring(libs.desugar.jdk.libs.v214)
     implementation(libs.compose.v260)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -103,11 +101,11 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // --- HILT ---
-    implementation("com.google.dagger:hilt-android:2.55")
-    ksp("com.google.dagger:hilt-android-compiler:2.55")
+    val hiltVersion = "2.55"
+    implementation("com.google.dagger:hilt-android:$hiltVersion")
+    ksp("com.google.dagger:hilt-android-compiler:$hiltVersion")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     // --- DATASTORE ---
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 }
-

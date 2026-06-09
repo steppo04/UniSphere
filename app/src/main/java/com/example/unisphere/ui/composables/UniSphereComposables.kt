@@ -41,7 +41,7 @@ fun UniSphereTextField(
     label: String,
     modifier: Modifier = Modifier,
     leadingIcon: ImageVector? = null,
-    trailingIcon: @Composable (() -> Unit)? = null, // Aggiunto slot per icone di coda (es. GPS o Password)
+    trailingIcon: @Composable (() -> Unit)? = null,
     singleLine: Boolean = true,
     minLines: Int = 1,
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
@@ -54,7 +54,7 @@ fun UniSphereTextField(
         onValueChange = onValueChange,
         label = { Text(label) },
         leadingIcon = leadingIcon?.let { { Icon(imageVector = it, contentDescription = null) } },
-        trailingIcon = trailingIcon, // Collega l'icona di coda al componente Material 3
+        trailingIcon = trailingIcon,
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
         singleLine = singleLine,
@@ -94,9 +94,9 @@ fun UniSphereListItem(
     headlineText: String,
     modifier: Modifier = Modifier,
     supportingText: String? = null,
-    leadingBarColor: Color? = null, // Colore opzionale della barra verticale
-    onClick: (() -> Unit)? = null,  // Callback opzionale per il click
-    trailingContent: @Composable (() -> Unit)? = null // Slot destro riutilizzabile (Slot API)
+    leadingBarColor: Color? = null,
+    onClick: (() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null
 ) {
     // Configura il modificatore di base gestendo il click solo se necessario
     val baseModifier = if (onClick != null) {

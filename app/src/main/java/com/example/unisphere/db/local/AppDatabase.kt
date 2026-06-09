@@ -31,7 +31,6 @@ import com.example.unisphere.ui.utils.CalendarConverters
         TransactionCategoryEntity::class,
         FavoriteRecipeEntity::class,
         PointOfInterestEntity::class,
-        // --- NUOVE ENTITÀ DI COABITAZIONE AGGIUNTE ---
         HouseEntity::class,
         HouseMemberEntity::class,
         HouseInvitationEntity::class,
@@ -40,7 +39,7 @@ import com.example.unisphere.ui.utils.CalendarConverters
         GroupTransactionEntity::class,
         TransactionSplitEntity::class
     ],
-    version = 7, // <--- PORTATO A 7 PER FARE IL REFRESH DELLE TABELLE
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(CalendarConverters::class)
@@ -53,7 +52,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun recipeDao(): RecipeDao
     abstract fun poiDao(): PoiDao
 
-    // --- NUOVO DAO ASSEGNATO ---
     abstract fun houseDao(): HouseDao
 
     companion object {

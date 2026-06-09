@@ -13,7 +13,7 @@ data class EventEntity(
     val description: String,
     val location: String,
     val date: LocalDate,
-    val startTime: LocalTime, // Nuovo
-    val endTime: LocalTime,   // Nuovo
+    val startTime: LocalTime,
+    val endTime: LocalTime,
     val calendar: Int
 )

@@ -21,8 +21,7 @@ fun rememberImagePicker(
     val context = LocalContext.current
     var showDialog by remember { mutableStateOf(false) }
 
-    // LA CHIAVE DEL SUCCESSO: rememberSaveable!
-    // Salviamo il percorso (String) invece del file, così sopravvive al riavvio della memoria
+
     var cameraTempFilePath by rememberSaveable { mutableStateOf<String?>(null) }
 
     // --- 1. GALLERIA ---
@@ -44,7 +43,7 @@ fun rememberImagePicker(
         }
     }
 
-    // --- 2. FOTOCAMERA UFFICIALE TRAMITE FILE PROVIDER ---
+    // --- 2. FOTOCAMERA TRAMITE FILE PROVIDER ---
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
@@ -63,10 +62,10 @@ fun rememberImagePicker(
                             }
                         }
 
-                        // Eliminiamo il file temporaneo di cache per fare pulizia
+                        // Elimina il file temporaneo di cache per fare pulizia
                         tempFile.delete()
 
-                        // Aggiorniamo la UI con il percorso permanente e stabile
+                        // Aggiorna la UI con il percorso permanente e stabile
                         onImageSelected(Uri.fromFile(destinationFile))
                     }
                 } catch (e: Exception) {
@@ -93,17 +92,17 @@ fun rememberImagePicker(
                     try {
                         val tempFile = File(context.cacheDir, "temp_camera_snap.jpg")
 
-                        // Salviamo la Stringa nel rememberSaveable PRIMA di aprire la fotocamera
+                        // Salva la Stringa nel rememberSaveable PRIMA di aprire la fotocamera
                         cameraTempFilePath = tempFile.absolutePath
 
-                        // Generiamo l'URI sicuro tramite il FileProvider
+                        // Genera l'URI sicuro tramite il FileProvider
                         val uri = FileProvider.getUriForFile(
                             context,
                             "${context.packageName}.provider",
                             tempFile
                         )
 
-                        // Lanciamo la fotocamera
+                        // Lancia la fotocamera
                         cameraLauncher.launch(uri)
                     } catch (e: Exception) {
                         e.printStackTrace()
